@@ -1,7 +1,12 @@
 <html>
 <head><title>index</title></head>
 <body>
-<h1>{{.msg}}</h1>
 <h1>main page</h1>
+<h1>{{.welcome}}</h1>
+{{if eq .link "personal_center"}}
+    <h1><a href = "home.html">个人中心</a></h1>
+{{else if eq .link "login"}}
+    <h1><a href = "login.html">登录</a></h1>
+{{end}}
 </body>
 </html>
