@@ -1,7 +1,6 @@
 package main
 
 import (
-	//"fmt"
 	"math/rand"
 	"net/http"
 	"strings"
@@ -9,7 +8,13 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jmoiron/sqlx"
+	_ "github.com/mattn/go-sqlite3"
 )
+
+var sb session_base         // Session数据库对象
+var valid_time int64 = 1800 // Session有效时间（秒）
+var db *sqlx.DB             // 数据库对象
 
 type session_base struct {
 	m sync.Map
@@ -20,7 +25,7 @@ type session_base struct {
 }
 
 func (sb *session_base) set(id string, info gin.H) {
-	if val, ok := info["userID"]; ok {
+	if val, ok := sb.user2ID.Load("userID"); ok {
 		sb.del(val.(string))
 	}
 	sb.m.Store(id, info)
@@ -47,8 +52,16 @@ func (sb *session_base) get(id string) (gin.H, bool) {
 	}
 }
 
-var sb session_base       // Session数据库对象
-var valid_time int64 = 10 // Session有效时间（秒）
+func query(sql string) []map[string]any {
+	res := []map[string]any{}
+	rows, _ := db.Queryx(sql)
+	for rows.Next() {
+		temp := map[string]any{}
+		rows.MapScan(temp)
+		res = append(res, temp)
+	}
+	return res
+}
 
 func produce_cookie() string {
 	// 随机生成新cookie算法
@@ -108,7 +121,8 @@ func Midware_Auth(c *gin.Context) {
 
 func main() {
 	r := gin.Default()
-	rand.Seed(time.Now().Unix()) // 服务器每次重启根据当前时间重置随机数种子
+	rand.Seed(time.Now().Unix())            // 服务器每次重启根据当前时间重置随机数种子
+	db, _ = sqlx.Open("sqlite3", "data.db") // 打开数据库
 
 	r.LoadHTMLGlob("root/*") // 加载HTML模板根目录
 
@@ -156,27 +170,56 @@ func main() {
 	r.POST("/login", func(c *gin.Context) {
 		// 登录页面处理，暂时只有一套账号密码，后续从数据库中读取
 		login := c.PostForm("login")
-		passwd := c.PostForm("pass")
-		if login == "3200104203" && passwd == "4203" {
+		passwd_get := c.PostForm("pass")
+		sql := "SELECT * FROM user WHERE userID=" + login
+		query_res := query(sql)
+		if len(query_res) == 0 {
+			c.HTML(http.StatusOK, "login.html", gin.H{
+				"msg": "用户不存在！请再次尝试。",
+			})
+			c.Abort()
+		}
+		passwd_need := query_res[0]["passwd"].(string)
+		if passwd_get == passwd_need {
 			newcookie := produce_cookie()
 			c.SetCookie("SessionID", newcookie, 3600, "/", "localhost", false, true)
 			sb.set(newcookie, gin.H{
 				"userID": login,
 				"due":    time.Now().Unix() + valid_time,
 			})
-			c.HTML(http.StatusOK, "home.html", gin.H{})
+			c.Redirect(http.StatusTemporaryRedirect, "/home.html")
 		} else {
 			c.HTML(http.StatusOK, "login.html", gin.H{
-				"msg": "密码错误，请再次尝试",
+				"msg": "密码错误，请再次尝试。",
 			})
 		}
 	})
 
 	r.GET("/home.html", Midware_Auth, func(c *gin.Context) {
 		// 后台页面，需要登录
+		userID := c.GetString("userID")
+
 		c.HTML(http.StatusOK, "home.html", gin.H{
-			"msg": "This is home page. ",
+			"msg": "Welcome, " + userID,
 		})
+	})
+
+	r.POST("/home.html", Midware_Auth, func(c *gin.Context) {
+		// 后台页面，需要登录
+		userID := c.GetString("userID")
+
+		c.HTML(http.StatusOK, "home.html", gin.H{
+			"msg": "Welcome, " + userID,
+		})
+	})
+
+	r.GET("/logout", func(c *gin.Context) {
+		// 退出登录
+		if SessionID, err := c.Cookie("SessionID"); err == nil {
+			sb.del(SessionID)
+		}
+
+		c.Redirect(http.StatusTemporaryRedirect, "/")
 	})
 
 	r.Run(":4203") // Listening at http://localhost:4203
