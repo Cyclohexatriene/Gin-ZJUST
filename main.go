@@ -1,8 +1,11 @@
 package main
 
 import (
+	"fmt"
+	"html/template"
 	"math/rand"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -63,6 +66,11 @@ func query(sql string) []map[string]any {
 	return res
 }
 
+func exec(sql string) bool {
+	_, err := db.Exec(sql)
+	return err == nil
+}
+
 func produce_cookie() string {
 	// 随机生成新cookie算法
 	// cookie是长度为10的字符串，由数字、大小写字母组成
@@ -119,8 +127,13 @@ func Midware_Auth(c *gin.Context) {
 	}
 }
 
+func strcat(a, b string) string {
+	return a + b
+}
+
 func main() {
 	r := gin.Default()
+	r.SetFuncMap(template.FuncMap{"strcat": strcat})
 	rand.Seed(time.Now().Unix())            // 服务器每次重启根据当前时间重置随机数种子
 	db, _ = sqlx.Open("sqlite3", "data.db") // 打开数据库
 
@@ -207,9 +220,57 @@ func main() {
 	r.POST("/home.html", Midware_Auth, func(c *gin.Context) {
 		// 后台页面，需要登录
 		userID := c.GetString("userID")
+		sql := "SELECT * FROM user WHERE userID=" + userID
+		query_res := query(sql)
+		account_type := query_res[0]["account_type"].(int64)
+		var add_item, add_basic_item, apply, audit_added, audit_basic, check_branch_info,
+			check_record, check_student_info, create_new_org, create_new_manager, item_anal, manage_self_info int
+		set_authorities := func(a int) {
+			// 根据变量定义顺序，从低位到高位依次赋值
+			varieties := []*int{&add_item, &add_basic_item, &apply, &audit_added, &audit_basic, &check_branch_info, &check_record, &check_student_info, &create_new_org, &create_new_manager, &item_anal, &manage_self_info}
+			idx := 0
+			for a > 0 {
+				if a&1 == 1 {
+					*varieties[idx] = 1
+				}
+				a >>= 1
+				idx++
+			}
+		}
+		if account_type == 0 {
+			// 超级管理员
+			set_authorities(0b111110011010)
+		} else if account_type == 1 {
+			// 校级管理员
+			set_authorities(0b111110011000)
+		} else if account_type == 2 {
+			// 单位管理员
+			set_authorities(0b100000000001)
+		} else if account_type == 3 {
+			// 学院管理员
+			set_authorities(0b100010110001)
+		} else if account_type == 4 {
+			// 团支部管理员
+			set_authorities(0b100010010000)
+		} else if account_type == 5 {
+			// 普通学生
+			set_authorities(0b100001000100)
+		}
 
 		c.HTML(http.StatusOK, "home.html", gin.H{
-			"msg": "Welcome, " + userID,
+			"msg":                "Welcome, " + userID,
+			"add_item":           add_item,
+			"add_basic_item":     add_basic_item,
+			"apply":              apply,
+			"audit_added":        audit_added,
+			"audit_basic":        audit_basic,
+			"check_branch_info":  check_branch_info,
+			"check_record":       check_record,
+			"check_student_info": check_student_info,
+			"create_new_org":     create_new_org,
+			"create_new_manager": create_new_manager,
+			"item_anal":          item_anal,
+			"manage_self_info":   manage_self_info,
 		})
 	})
 
@@ -218,8 +279,59 @@ func main() {
 		if SessionID, err := c.Cookie("SessionID"); err == nil {
 			sb.del(SessionID)
 		}
-
 		c.Redirect(http.StatusTemporaryRedirect, "/")
+	})
+
+	r.GET("/add_basic_item.html", Midware_Auth, func(c *gin.Context) {
+		userID := c.GetString("userID")
+		sql := "SELECT name,score_lower_range,score_higher_range,create_org,description FROM item WHERE type=0;"
+		query_res := query(sql)
+		c.HTML(http.StatusOK, "add_basic_item.html", gin.H{
+			"msg":   "welcome, " + userID,
+			"added": query_res,
+		})
+	})
+	r.POST("/add_basic_item", Midware_Auth, func(c *gin.Context) {
+		userID := c.GetString("userID")
+		item_name := c.PostForm("name")
+		var msg string
+		sql := fmt.Sprintf("SELECT * FROM item WHERE name=\"%s\";", item_name)
+		query_res := query(sql)
+		if len(query_res) == 0 {
+			score_lower_range, _ := strconv.ParseFloat(c.PostForm("score_lower_range"), 64)
+			score_higher_range, _ := strconv.ParseFloat(c.PostForm("score_higher_range"), 64)
+			org_name := query("SELECT * FROM user WHERE userID=" + userID)[0]["belonging_org"].(string)
+			description := c.PostForm("description")
+			sql = fmt.Sprintf("INSERT INTO item VALUES(NULL,0,0,\"%s\",%.1f,%.1f,\"%s\",\"%s\",NULL);", item_name, score_lower_range, score_higher_range, org_name, description)
+			ok := exec(sql)
+
+			if ok {
+				msg = "添加成功！"
+			} else {
+				msg = "添加失败，请重试"
+			}
+		} else {
+			msg = "添加失败。项目已存在！"
+		}
+		sql = "SELECT name,score_lower_range,score_higher_range,create_org,description FROM item WHERE type=0;"
+		query_res = query(sql)
+		c.HTML(http.StatusOK, "add_basic_item.html", gin.H{
+			"msg":   msg,
+			"added": query_res,
+		})
+	})
+
+	r.GET("/delete_item", Midware_Auth, func(c *gin.Context) {
+		to_delete := c.Query("name")
+		sql := fmt.Sprintf("DELETE FROM item WHERE name=\"%s\";", to_delete)
+		exec(sql)
+		sql = "SELECT name,score_lower_range,score_higher_range,create_org,description FROM item WHERE type=0;"
+		query_res := query(sql)
+		c.HTML(http.StatusOK, "add_basic_item.html", gin.H{
+			"msg":   "删除成功！",
+			"added": query_res,
+		})
+
 	})
 
 	r.Run(":4203") // Listening at http://localhost:4203

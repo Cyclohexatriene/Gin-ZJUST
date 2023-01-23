@@ -4,51 +4,51 @@
 <h1>{{.msg}}</h1>
 <h1>home page</h1>
 
-{{if .add_item}}
+{{if eq .add_item 1}}
     <a href = "add_item.html">非基础项目立项</a>
 {{end}}
 
-{{if .add_basic_item}}
+{{if eq .add_basic_item 1}}
     <a href = "add_basic_item.html">基础项目立项</a>
 {{end}}
 
-{{if .apply}}
+{{if eq .apply 1}}
     <a href = "apply.html">项目申请</a>
 {{end}}
 
-{{if .audit_added}}
+{{if eq .audit_added 1}}
     <a href = "audit_added.html">非基础项目审核</a>
 {{end}}
 
-{{if .audit_basic}}
+{{if eq .audit_basic 1}}
     <a href = "audit_basic.html">基础项目审核</a>
 {{end}}
 
-{{if .check_branch_info}}
+{{if eq .check_branch_info 1}}
     <a href = "check_branch_info.html">查看团支部信息</a>
 {{end}}
 
-{{if .check_record}}
+{{if eq .check_record 1}}
     <a href = "check_record.html">申请记录</a>
 {{end}}
 
-{{if .check_student_info}}
+{{if eq .check_student_info 1}}
     <a href = "check_student_info.html">查看学生信息</a>
 {{end}}
 
-{{if .create_new_org}}
+{{if eq .create_new_org 1}}
     <a href = "create_new_org.html">创建单位</a>
 {{end}}
 
-{{if .create_new_user}}
-    <a href = "create_new_user.html">创建用户</a>
+{{if eq .create_new_manager 1}}
+    <a href = "create_new_manager.html">管理员管理</a>
 {{end}}
 
-{{if .item_anal}}
+{{if eq .item_anal 1}}
     <a href = "item_anal.html">待审核项目统计</a>
 {{end}}
 
-{{if .manage_self_info}}
+{{if eq .manage_self_info 1}}
     <a href = "manage_self_info.html">个人信息管理</a>
 {{end}}
 

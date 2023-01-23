@@ -1,1 +1,37 @@
-基础项目立项
+<html>
+<head><title>基础项目立项</title></head>
+<body>
+<h1>{{.msg}}</h1>
+<h1>基础项目立项：</h1>
+<form action="add_basic_item" method="POST">
+    项目名称：<input name="name">
+    <br>
+    分数范围：<input name="score_lower_range"> - <input name="score_higher_range">
+    <br>
+    项目说明：<input name="description">
+    <br>
+    <input type="submit" value="提交">
+</form>
+
+<h1>已有项目：</h1>
+<table border="1" style="border-collapse: collapse;">
+    <caption>
+        <th>序号</th>
+        <th>项目名称</th>
+        <th>分数范围</th>
+        <th>项目内容</th>
+        <th>操作</th>
+    </caption>
+    {{range $idx, $value := .added}}
+    <tr>
+        <td align="center">{{$idx}}</td>
+        <td align="center">{{$value.name}}</td>
+        <td align="center">{{$value.score_lower_range}} - {{$value.score_higher_range}}</td>
+        <td>{{$value.description}}</td>
+        <td><a href={{strcat "/delete_item?name=" $value.name}}>删除</a></td>
+    </tr>
+    {{end}}
+</table>
+</body>
+</html>
+
