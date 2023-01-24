@@ -137,6 +137,15 @@ func main() {
 	rand.Seed(time.Now().Unix())            // 服务器每次重启根据当前时间重置随机数种子
 	db, _ = sqlx.Open("sqlite3", "data.db") // 打开数据库
 
+	account_types := map[int64]string{
+		0: "超级管理员",
+		1: "校级管理员",
+		2: "单位管理员",
+		3: "学院管理员",
+		4: "团支部管理员",
+		5: "学生",
+	}
+
 	r.LoadHTMLGlob("root/*") // 加载HTML模板根目录
 
 	r.GET("/", func(c *gin.Context) {
@@ -211,9 +220,57 @@ func main() {
 	r.GET("/home.html", Midware_Auth, func(c *gin.Context) {
 		// 后台页面，需要登录
 		userID := c.GetString("userID")
+		sql := "SELECT * FROM user WHERE userID=" + userID
+		query_res := query(sql)
+		account_type := query_res[0]["account_type"].(int64)
+		var add_item, add_basic_item, apply, audit_added, audit_basic, check_branch_info,
+			check_record, check_student_info, create_new_org, create_new_manager, item_anal, manage_self_info int
+		set_authorities := func(a int) {
+			// 根据变量定义顺序，从低位到高位依次赋值
+			varieties := []*int{&add_item, &add_basic_item, &apply, &audit_added, &audit_basic, &check_branch_info, &check_record, &check_student_info, &create_new_org, &create_new_manager, &item_anal, &manage_self_info}
+			idx := 0
+			for a > 0 {
+				if a&1 == 1 {
+					*varieties[idx] = 1
+				}
+				a >>= 1
+				idx++
+			}
+		}
+		if account_type == 0 {
+			// 超级管理员
+			set_authorities(0b111110011010)
+		} else if account_type == 1 {
+			// 校级管理员
+			set_authorities(0b111110011000)
+		} else if account_type == 2 {
+			// 单位管理员
+			set_authorities(0b100000000001)
+		} else if account_type == 3 {
+			// 学院管理员
+			set_authorities(0b100010110001)
+		} else if account_type == 4 {
+			// 团支部管理员
+			set_authorities(0b100010010000)
+		} else if account_type == 5 {
+			// 普通学生
+			set_authorities(0b100001000100)
+		}
 
 		c.HTML(http.StatusOK, "home.html", gin.H{
-			"msg": "Welcome, " + userID,
+			"msg":                "Welcome, " + userID,
+			"add_item":           add_item,
+			"add_basic_item":     add_basic_item,
+			"apply":              apply,
+			"audit_added":        audit_added,
+			"audit_basic":        audit_basic,
+			"check_branch_info":  check_branch_info,
+			"check_record":       check_record,
+			"check_student_info": check_student_info,
+			"create_new_org":     create_new_org,
+			"create_new_manager": create_new_manager,
+			"item_anal":          item_anal,
+			"manage_self_info":   manage_self_info,
 		})
 	})
 
@@ -332,6 +389,66 @@ func main() {
 			"added": query_res,
 		})
 
+	})
+
+	r.GET("/create_new_manager.html", Midware_Auth, func(c *gin.Context) {
+		query_res := query("SELECT orgID,name FROM organization;")
+		admins := query("SELECT user.userID AS userID,user.account_type AS account_type, organization.name AS belonging_org FROM user,organization WHERE organization.orgID=user.belonging_org AND (account_type=1 OR account_type=2 OR account_type=3 OR account_type=4);")
+		for _, admin := range admins {
+			admin["account_type"] = account_types[admin["account_type"].(int64)]
+		}
+		c.HTML(http.StatusOK, "create_new_manager.html", gin.H{
+			"msg":    "",
+			"orgs":   query_res,
+			"admins": admins,
+		})
+	})
+
+	r.POST("/create_new_manager", Midware_Auth, func(c *gin.Context) {
+		name := c.PostForm("name")
+		default_passwd := "123456"
+		admin_type, _ := strconv.Atoi(c.PostForm("type"))
+		belonging_org, _ := strconv.Atoi(c.PostForm("belonging_org"))
+		sql := fmt.Sprintf("INSERT INTO user VALUES(\"%s\",\"%s\",%d,%d);", name, default_passwd, admin_type, belonging_org)
+		ok := exec(sql)
+		orgs := query("SELECT orgID,name FROM organization;")
+		admins := query("SELECT user.userID AS userID,user.account_type AS account_type, organization.name AS belonging_org FROM user,organization WHERE organization.orgID=user.belonging_org AND (account_type=1 OR account_type=2 OR account_type=3 OR account_type=4);")
+		for _, admin := range admins {
+			admin["account_type"] = account_types[admin["account_type"].(int64)]
+		}
+		var msg string
+		if ok {
+			msg = "添加成功！"
+		} else {
+			msg = "添加失败"
+		}
+		c.HTML(http.StatusOK, "create_new_manager.html", gin.H{
+			"msg":    msg,
+			"orgs":   orgs,
+			"admins": admins,
+		})
+	})
+
+	r.GET("/delete_admin", Midware_Auth, func(c *gin.Context) {
+		userID := c.Query("userID")
+		sql := fmt.Sprintf("DELETE FROM user WHERE userID=\"%s\"", userID)
+		ok := exec(sql)
+		var msg string
+		if ok {
+			msg = "删除成功！"
+		} else {
+			msg = "删除失败"
+		}
+		orgs := query("SELECT orgID,name FROM organization;")
+		admins := query("SELECT user.userID AS userID,user.account_type AS account_type, organization.name AS belonging_org FROM user,organization WHERE organization.orgID=user.belonging_org AND (account_type=1 OR account_type=2 OR account_type=3 OR account_type=4);")
+		for _, admin := range admins {
+			admin["account_type"] = account_types[admin["account_type"].(int64)]
+		}
+		c.HTML(http.StatusOK, "create_new_manager.html", gin.H{
+			"msg":    msg,
+			"orgs":   orgs,
+			"admins": admins,
+		})
 	})
 
 	r.Run(":4203") // Listening at http://localhost:4203

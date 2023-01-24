@@ -1,1 +1,45 @@
-创建新用户
+<html>
+<head><title>管理员管理</title></head>
+<body>
+<h1>{{.msg}}</h1>
+<h1>添加管理员</h1>
+<form action="create_new_manager" method="POST">
+    管理员名称：<input name="name">
+    <br>
+    管理员类型：
+    <select name="type">
+        <option value="1">校级管理员</option>
+        <option value="2">单位管理员</option>
+        <option value="3">学院管理员</option>
+        <option value="4">团支部管理员</option>
+    </select>
+    <br>
+    所属组织：
+    <select name="belonging_org">
+        {{range $idx, $value := .orgs}}
+        <option value={{$value.orgID}}>{{$value.name}}</option>
+        {{end}}
+    </select>
+    <br>
+    <input type="submit" value="提交">
+</form>
+
+<h1>所有管理员：</h1>
+<table border="1" style="border-collapse: collapse;">
+    <caption>
+        <th>用户名</th>
+        <th>账号类型</th>
+        <th>所属组织</th>
+        <th>操作</th>
+    </caption>
+    {{range $idx, $admin := .admins}}
+    <tr>
+        <td>{{$admin.userID}}</td>
+        <td>{{$admin.account_type}}</td>
+        <td>{{$admin.belonging_org}}</td>
+        <td><a href={{strcat "/delete_admin?userID=" $admin.userID}}>删除</a></td>
+    </tr>
+    {{end}}
+</table>
+</body>
+</html>
