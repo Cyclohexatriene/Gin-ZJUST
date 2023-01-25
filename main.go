@@ -15,7 +15,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-var sb session_base         // Session数据库对象
+var sb session_base         // Session库对象
 var valid_time int64 = 1800 // Session有效时间（秒）
 var db *sqlx.DB             // 数据库对象
 
@@ -28,7 +28,7 @@ type session_base struct {
 }
 
 func (sb *session_base) set(id string, info gin.H) {
-	if val, ok := sb.user2ID.Load("userID"); ok {
+	if val, ok := sb.user2ID.Load(info["userID"]); ok {
 		sb.del(val.(string))
 	}
 	sb.m.Store(id, info)
@@ -190,10 +190,10 @@ func main() {
 		}
 	})
 	r.POST("/login", func(c *gin.Context) {
-		// 登录页面处理，暂时只有一套账号密码，后续从数据库中读取
+		// 登录页面处理
 		login := c.PostForm("login")
 		passwd_get := c.PostForm("pass")
-		sql := "SELECT * FROM user WHERE userID=" + login
+		sql := fmt.Sprintf("SELECT * FROM user WHERE userID=\"%s\"", login)
 		query_res := query(sql)
 		if len(query_res) == 0 {
 			c.HTML(http.StatusOK, "login.html", gin.H{
@@ -220,7 +220,7 @@ func main() {
 	r.GET("/home.html", Midware_Auth, func(c *gin.Context) {
 		// 后台页面，需要登录
 		userID := c.GetString("userID")
-		sql := "SELECT * FROM user WHERE userID=" + userID
+		sql := fmt.Sprintf("SELECT * FROM user WHERE userID=\"%s\";", userID)
 		query_res := query(sql)
 		account_type := query_res[0]["account_type"].(int64)
 		var add_item, add_basic_item, apply, audit_added, audit_basic, check_branch_info,
@@ -277,7 +277,7 @@ func main() {
 	r.POST("/home.html", Midware_Auth, func(c *gin.Context) {
 		// 后台页面，需要登录
 		userID := c.GetString("userID")
-		sql := "SELECT * FROM user WHERE userID=" + userID
+		sql := fmt.Sprintf("SELECT * FROM user WHERE userID=\"%s\";", userID)
 		query_res := query(sql)
 		account_type := query_res[0]["account_type"].(int64)
 		var add_item, add_basic_item, apply, audit_added, audit_basic, check_branch_info,
@@ -448,6 +448,31 @@ func main() {
 			"msg":    msg,
 			"orgs":   orgs,
 			"admins": admins,
+		})
+	})
+
+	r.GET("/manage_self_info.html", Midware_Auth, func(c *gin.Context) {
+		c.HTML(http.StatusOK, "manage_self_info.html", gin.H{
+			"msg":    "",
+			"userID": c.GetString("userID"),
+		})
+	})
+	r.POST("/change_passwd", Midware_Auth, func(c *gin.Context) {
+		new_passwd := c.PostForm("new_passwd")
+		userID := c.GetString("userID")
+		sql := fmt.Sprintf("UPDATE user SET passwd=\"%s\" WHERE userID=\"%s\"", new_passwd, userID)
+		ok := exec(sql)
+		msg := ""
+		if ok {
+			msg = "修改成功！"
+			SessionID, _ := sb.user2ID.Load(userID)
+			sb.del(SessionID.(string))
+		} else {
+			msg = "修改失败"
+		}
+		c.HTML(http.StatusOK, "manage_self_info.html", gin.H{
+			"msg":    msg,
+			"userID": userID,
 		})
 	})
 

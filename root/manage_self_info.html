@@ -1,1 +1,13 @@
-修改个人信息
+<html>
+<head><title>修改个人信息</title></head>
+<body>
+<h1>修改个人信息</h1>
+<h1>{{.msg}}</h1>
+用户名： {{.userID}}
+<form action="change_passwd" method="POST">
+新密码：<input name="new_passwd">
+<br>
+<input type="submit" value="提交">
+</form>
+</body>
+</html>
