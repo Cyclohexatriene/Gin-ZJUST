@@ -1,1 +1,46 @@
-创建新学院/单位
+<html>
+<head><title>创建组织</title></head>
+<body>
+<h1>{{.msg}}</h1>
+<h1>创建组织</h1>
+新建组织会自动生成同名默认管理员，默认密码为123456
+<form action="create_new_organization" method="POST">
+    组织名称：<input name="name">
+    <br>
+    组织类型：
+    <select name="type">
+        <option value="0">校级管理员</option>
+        <option value="1">单位管理员</option>
+        <option value="2">学院管理员</option>
+        <option value="3">团支部管理员</option>
+    </select>
+    <br>
+    从属组织：
+    <select name="belonging_org">
+        {{range $idx, $org := .orgs}}
+        <option value={{$org.orgID}}>{{$org.name}}</option>
+        {{end}}
+    </select>
+    <br>
+    <input type="submit" value="提交">
+</form>
+
+<h1>所有组织：</h1>
+<table border="1" style="border-collapse: collapse;">
+    <caption>
+        <th>用户名</th>
+        <th>账号类型</th>
+        <th>所属组织</th>
+        <th>操作</th>
+    </caption>
+    {{range $idx, $org := .orgs}}
+    <tr>
+        <td>{{$org.name}}</td>
+        <td>{{$org.type}}</td>
+        <td>{{$org.higher_org}}</td>
+        <td><a href={{strcat1 "/delete_org?orgID=" $org.orgID}}>删除</a></td>
+    </tr>
+    {{end}}
+</table>
+</body>
+</html>

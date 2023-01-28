@@ -130,10 +130,17 @@ func Midware_Auth(c *gin.Context) {
 func strcat(a, b string) string {
 	return a + b
 }
+func strcat1(a string, b int64) string {
+	c := int(b)
+	return a + strconv.Itoa(c)
+}
 
 func main() {
 	r := gin.Default()
-	r.SetFuncMap(template.FuncMap{"strcat": strcat})
+	r.SetFuncMap(template.FuncMap{
+		"strcat":  strcat,
+		"strcat1": strcat1,
+	})
 	rand.Seed(time.Now().Unix())            // 服务器每次重启根据当前时间重置随机数种子
 	db, _ = sqlx.Open("sqlite3", "data.db") // 打开数据库
 
@@ -144,6 +151,13 @@ func main() {
 		3: "学院管理员",
 		4: "团支部管理员",
 		5: "学生",
+	}
+
+	org_type := map[int64]string{
+		0: "学校",
+		1: "单位",
+		2: "学院",
+		3: "团支部",
 	}
 
 	r.LoadHTMLGlob("root/*") // 加载HTML模板根目录
@@ -200,20 +214,21 @@ func main() {
 				"msg": "用户不存在！请再次尝试。",
 			})
 			c.Abort()
-		}
-		passwd_need := query_res[0]["passwd"].(string)
-		if passwd_get == passwd_need {
-			newcookie := produce_cookie()
-			c.SetCookie("SessionID", newcookie, 3600, "/", "localhost", false, true)
-			sb.set(newcookie, gin.H{
-				"userID": login,
-				"due":    time.Now().Unix() + valid_time,
-			})
-			c.Redirect(http.StatusTemporaryRedirect, "/home.html")
 		} else {
-			c.HTML(http.StatusOK, "login.html", gin.H{
-				"msg": "密码错误，请再次尝试。",
-			})
+			passwd_need := query_res[0]["passwd"].(string)
+			if passwd_get == passwd_need {
+				newcookie := produce_cookie()
+				c.SetCookie("SessionID", newcookie, 3600, "/", "localhost", false, true)
+				sb.set(newcookie, gin.H{
+					"userID": login,
+					"due":    time.Now().Unix() + valid_time,
+				})
+				c.Redirect(http.StatusTemporaryRedirect, "/home.html")
+			} else {
+				c.HTML(http.StatusOK, "login.html", gin.H{
+					"msg": "密码错误，请再次尝试。",
+				})
+			}
 		}
 	})
 
@@ -392,14 +407,14 @@ func main() {
 	})
 
 	r.GET("/create_new_manager.html", Midware_Auth, func(c *gin.Context) {
-		query_res := query("SELECT orgID,name FROM organization;")
+		orgs := query("SELECT orgID,name FROM organization;")
 		admins := query("SELECT user.userID AS userID,user.account_type AS account_type, organization.name AS belonging_org FROM user,organization WHERE organization.orgID=user.belonging_org AND (account_type=1 OR account_type=2 OR account_type=3 OR account_type=4);")
 		for _, admin := range admins {
 			admin["account_type"] = account_types[admin["account_type"].(int64)]
 		}
 		c.HTML(http.StatusOK, "create_new_manager.html", gin.H{
 			"msg":    "",
-			"orgs":   query_res,
+			"orgs":   orgs,
 			"admins": admins,
 		})
 	})
@@ -473,6 +488,72 @@ func main() {
 		c.HTML(http.StatusOK, "manage_self_info.html", gin.H{
 			"msg":    msg,
 			"userID": userID,
+		})
+	})
+
+	r.GET("/create_new_org.html", Midware_Auth, func(c *gin.Context) {
+		orgs := query("SELECT a.orgID AS orgID,a.name AS name,a.type AS type, b.name AS higher_org FROM organization AS a LEFT JOIN organization AS b WHERE a.higher_org=b.orgID;")
+		for _, org := range orgs {
+			org["type"] = org_type[org["type"].(int64)]
+		}
+		c.HTML(http.StatusOK, "create_new_org.html", gin.H{
+			"msg":  "",
+			"orgs": orgs,
+		})
+	})
+
+	r.POST("/create_new_organization", Midware_Auth, func(c *gin.Context) {
+		org_name := c.PostForm("name")
+		org_mtype := c.PostForm("type")
+		higher_org := c.PostForm("belonging_org")
+		sql := fmt.Sprintf("INSERT INTO organization VALUES(NULL,\"%s\",%s,%s);", org_name, org_mtype, higher_org)
+		ok := exec(sql)
+		sql = fmt.Sprintf("SELECT orgID FROM organization WHERE name=\"%s\";", org_name)
+		orgID := query(sql)[0]["orgID"].(int64)
+		orgtp, _ := strconv.Atoi(org_mtype)
+		sql = fmt.Sprintf("INSERT INTO user VALUES(\"%s\",\"123456\",%d,%d);", org_name, orgtp+1, orgID)
+		ok1 := exec(sql)
+		if ok && !ok1 {
+			sql = fmt.Sprintf("DELETE FROM organization WHERE orgID=%d", orgID)
+			exec(sql)
+			ok = false
+		}
+		msg := ""
+		if ok {
+			msg = "添加成功！"
+		} else {
+			msg = "添加失败"
+		}
+		orgs := query("SELECT a.orgID AS orgID,a.name AS name,a.type AS type, b.name AS higher_org FROM organization AS a LEFT JOIN organization AS b WHERE a.higher_org=b.orgID;")
+		for _, org := range orgs {
+			org["type"] = org_type[org["type"].(int64)]
+		}
+		c.HTML(http.StatusOK, "create_new_org.html", gin.H{
+			"msg":  msg,
+			"orgs": orgs,
+		})
+	})
+
+	r.GET("/delete_org", Midware_Auth, func(c *gin.Context) {
+		to_delete := c.Query("orgID")
+		sql := fmt.Sprintf("DELETE FROM organization WHERE orgID=%s;", to_delete)
+		ok := exec(sql)
+		sql = fmt.Sprintf("DELETE FROM user WHERE belonging_org=%s;", to_delete)
+		ok1 := exec(sql)
+		ok = ok && ok1
+		msg := ""
+		if ok {
+			msg = "删除成功！"
+		} else {
+			msg = "删除失败"
+		}
+		orgs := query("SELECT a.orgID AS orgID,a.name AS name,a.type AS type, b.name AS higher_org FROM organization AS a LEFT JOIN organization AS b WHERE a.higher_org=b.orgID;")
+		for _, org := range orgs {
+			org["type"] = org_type[org["type"].(int64)]
+		}
+		c.HTML(http.StatusOK, "create_new_org.html", gin.H{
+			"msg":  msg,
+			"orgs": orgs,
 		})
 	})
 
