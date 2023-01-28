@@ -506,23 +506,30 @@ func main() {
 		org_name := c.PostForm("name")
 		org_mtype := c.PostForm("type")
 		higher_org := c.PostForm("belonging_org")
-		sql := fmt.Sprintf("INSERT INTO organization VALUES(NULL,\"%s\",%s,%s);", org_name, org_mtype, higher_org)
-		ok := exec(sql)
-		sql = fmt.Sprintf("SELECT orgID FROM organization WHERE name=\"%s\";", org_name)
-		orgID := query(sql)[0]["orgID"].(int64)
-		orgtp, _ := strconv.Atoi(org_mtype)
-		sql = fmt.Sprintf("INSERT INTO user VALUES(\"%s\",\"123456\",%d,%d);", org_name, orgtp+1, orgID)
-		ok1 := exec(sql)
-		if ok && !ok1 {
-			sql = fmt.Sprintf("DELETE FROM organization WHERE orgID=%d", orgID)
-			exec(sql)
-			ok = false
-		}
+		sql := fmt.Sprintf("SELECT * FROM organization WHERE name=\"%s\";", org_name)
+		query_res := query(sql)
 		msg := ""
-		if ok {
-			msg = "添加成功！"
+		if len(query_res) > 0 {
+			msg = "添加失败：名称重复！"
 		} else {
-			msg = "添加失败"
+			sql = fmt.Sprintf("INSERT INTO organization VALUES(NULL,\"%s\",%s,%s);", org_name, org_mtype, higher_org)
+			ok := exec(sql)
+			sql = fmt.Sprintf("SELECT orgID FROM organization WHERE name=\"%s\";", org_name)
+			orgID := query(sql)[0]["orgID"].(int64)
+			orgtp, _ := strconv.Atoi(org_mtype)
+			sql = fmt.Sprintf("INSERT INTO user VALUES(\"%s\",\"123456\",%d,%d);", org_name, orgtp+1, orgID)
+			ok1 := exec(sql)
+			if ok && !ok1 {
+				sql = fmt.Sprintf("DELETE FROM organization WHERE orgID=%d", orgID)
+				exec(sql)
+				ok = false
+			}
+
+			if ok {
+				msg = "添加成功！"
+			} else {
+				msg = "添加失败"
+			}
 		}
 		orgs := query("SELECT a.orgID AS orgID,a.name AS name,a.type AS type, b.name AS higher_org FROM organization AS a LEFT JOIN organization AS b WHERE a.higher_org=b.orgID;")
 		for _, org := range orgs {
@@ -554,6 +561,77 @@ func main() {
 		c.HTML(http.StatusOK, "create_new_org.html", gin.H{
 			"msg":  msg,
 			"orgs": orgs,
+		})
+	})
+
+	r.GET("/check_branch_info.html", Midware_Auth, func(c *gin.Context) {
+		userID := c.GetString("userID")
+		sql := fmt.Sprintf("SELECT orgID FROM organization WHERE name=\"%s\"", userID)
+		orgID := query(sql)[0]["orgID"].(int64)
+		sql = fmt.Sprintf("SELECT * FROM organization WHERE higher_org=%d", orgID)
+		branches := query(sql)
+		c.HTML(http.StatusOK, "check_branch_info.html", gin.H{
+			"msg":      "",
+			"userID":   userID,
+			"branches": branches,
+		})
+	})
+
+	r.POST("/create_new_branch", Midware_Auth, func(c *gin.Context) {
+		collegeID := c.GetString("userID")
+		userID := c.PostForm("name")
+		sql := fmt.Sprintf("SELECT * FROM organization WHERE name=\"%s\";", userID)
+		query_res := query(sql)
+		msg := ""
+		var orgID int64
+		if len(query_res) > 0 {
+			msg = "添加失败：名称重复！"
+		} else {
+			sql = fmt.Sprintf("SELECT orgID FROM organization WHERE name=\"%s\";", collegeID)
+			orgID = query(sql)[0]["orgID"].(int64)
+			sql = fmt.Sprintf("INSERT INTO organization VALUES(NULL,\"%s\",3,%d);", userID, orgID)
+			ok := exec(sql)
+			sql = fmt.Sprintf("SELECT orgID FROM organization WHERE name=\"%s\";", userID)
+			branchID := query(sql)[0]["orgID"].(int64)
+			sql = fmt.Sprintf("INSERT INTO user VALUES(\"%s\",\"123456\",4,%d);", userID, branchID)
+			ok1 := exec(sql)
+			ok = ok && ok1
+			if ok {
+				msg = "添加成功！"
+			} else {
+				msg = "添加失败"
+			}
+		}
+		sql = fmt.Sprintf("SELECT * FROM organization WHERE higher_org=%d", orgID)
+		branches := query(sql)
+		c.HTML(http.StatusOK, "check_branch_info.html", gin.H{
+			"msg":      msg,
+			"userID":   collegeID,
+			"branches": branches,
+		})
+	})
+
+	r.GET("/delete_branch", Midware_Auth, func(c *gin.Context) {
+		to_delete := c.Query("branchID")
+		sql := fmt.Sprintf("DELETE FROM organization WHERE orgID=%s;", to_delete)
+		ok := exec(sql)
+		sql = fmt.Sprintf("DELETE FROM user WHERE belonging_org=%s;", to_delete)
+		ok = ok && exec(sql)
+		msg := ""
+		if ok {
+			msg = "删除成功！"
+		} else {
+			msg = "删除失败"
+		}
+		collegeID := c.GetString("userID")
+		sql = fmt.Sprintf("SELECT orgID FROM organization WHERE name=\"%s\";", collegeID)
+		orgID := query(sql)[0]["orgID"].(int64)
+		sql = fmt.Sprintf("SELECT * FROM organization WHERE higher_org=%d", orgID)
+		branches := query(sql)
+		c.HTML(http.StatusOK, "check_branch_info.html", gin.H{
+			"msg":      msg,
+			"userID":   collegeID,
+			"branches": branches,
 		})
 	})
 

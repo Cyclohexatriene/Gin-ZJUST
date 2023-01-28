@@ -1,1 +1,31 @@
-管理团支部
+<html>
+<head><title>团支部管理</title></head>
+<body>
+<h1>{{.msg}}</h1>
+<h1>新建团支部</h1>
+新建团支部会自动创建同名默认管理员，默认密码为123456
+<br>
+<br>
+<form action="create_new_branch" method="POST">
+    团支部名称：<input name="name">
+    <br>
+    所属学院：{{.userID}}
+    <br>
+    <input type="submit" value="创建">
+</form>
+<h1>所有团支部</h1>
+<table border="1" style="border-collapse: collapse;">
+    <caption>
+        <th>团支部名称</th>
+        <th>操作</th>
+    </caption>
+    {{range $idx, $branch := .branches}}
+    <tr>
+        <td align="center">{{$branch.name}}</td>
+        <td align="center"><a href={{strcat1 "/delete_branch?branchID=" $branch.orgID}}>删除</a></td>
+    </tr>
+    {{end}}
+</table>
+
+</body>
+</html>

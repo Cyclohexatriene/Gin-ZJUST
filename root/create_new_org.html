@@ -28,17 +28,17 @@
 <h1>所有组织：</h1>
 <table border="1" style="border-collapse: collapse;">
     <caption>
-        <th>用户名</th>
-        <th>账号类型</th>
-        <th>所属组织</th>
+        <th>组织名</th>
+        <th>组织类型</th>
+        <th>从属组织</th>
         <th>操作</th>
     </caption>
     {{range $idx, $org := .orgs}}
     <tr>
-        <td>{{$org.name}}</td>
-        <td>{{$org.type}}</td>
-        <td>{{$org.higher_org}}</td>
-        <td><a href={{strcat1 "/delete_org?orgID=" $org.orgID}}>删除</a></td>
+        <td align="center">{{$org.name}}</td>
+        <td align="center">{{$org.type}}</td>
+        <td align="center">{{$org.higher_org}}</td>
+        <td align="center"><a href={{strcat1 "/delete_org?orgID=" $org.orgID}}>删除</a></td>
     </tr>
     {{end}}
 </table>
