@@ -1,1 +1,22 @@
-修改学生信息
+<html>
+<head><title>查看学生信息</title></head>
+<body>
+<h1>{{.msg}}</h1>
+
+<h1>所有学生：</h1>
+<table border="1" style="border-collapse: collapse;">
+    <caption>
+        <th>用户名</th>
+        <th>所属团支部</th>
+        <th>操作</th>
+    </caption>
+    {{range $idx, $stu := .stus}}
+    <tr>
+        <td align="center">{{$stu.name}}</td>
+        <td align="center">{{$stu.belonging_org}}</td>
+        <td align="center"><a href={{strcat "/delete_stu?name=" $stu.name}}>删除</a></td>
+    </tr>
+    {{end}}
+</table>
+</body>
+</html>

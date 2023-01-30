@@ -127,6 +127,21 @@ func Midware_Auth(c *gin.Context) {
 	}
 }
 
+func Authorities(auth int) gin.HandlerFunc {
+	// 从高位到低位依次代表学生用户、团支部账号、学院账号、单位账号、校级账号、超级管理员是否拥有访问权限
+	return func(c *gin.Context) {
+		userID := c.GetString("userID")
+		sql := fmt.Sprintf("SELECT account_type FROM user WHERE userID=\"%s\";", userID)
+		account_type := query(sql)[0]["account_type"].(int64)
+		if auth&(1<<account_type) == 0 {
+			c.String(http.StatusOK, "权限不足！")
+			c.Abort()
+		} else {
+			c.Set("account_type", account_type)
+		}
+	}
+}
+
 func strcat(a, b string) string {
 	return a + b
 }
@@ -189,7 +204,7 @@ func main() {
 		})
 
 	})
-	r.GET("/login.html", Midware_Auth, func(c *gin.Context) {
+	r.GET("/login.html", Midware_Auth, Authorities(0b111111), func(c *gin.Context) {
 		// 登录页面，若已登录则直接跳转到首页
 		if login_status, exist := c.Get("login_status"); exist && login_status.(bool) {
 			userID := c.GetString("userID")
@@ -232,17 +247,17 @@ func main() {
 		}
 	})
 
-	r.GET("/home.html", Midware_Auth, func(c *gin.Context) {
+	r.GET("/home.html", Midware_Auth, Authorities(0b111111), func(c *gin.Context) {
 		// 后台页面，需要登录
 		userID := c.GetString("userID")
 		sql := fmt.Sprintf("SELECT * FROM user WHERE userID=\"%s\";", userID)
 		query_res := query(sql)
 		account_type := query_res[0]["account_type"].(int64)
 		var add_item, add_basic_item, apply, audit_added, audit_basic, check_branch_info,
-			check_record, check_student_info, create_new_org, create_new_manager, item_anal, manage_self_info int
+			check_record, check_student_info, create_new_org, create_new_manager, item_anal, manage_self_info, import_new_student int
 		set_authorities := func(a int) {
 			// 根据变量定义顺序，从低位到高位依次赋值
-			varieties := []*int{&add_item, &add_basic_item, &apply, &audit_added, &audit_basic, &check_branch_info, &check_record, &check_student_info, &create_new_org, &create_new_manager, &item_anal, &manage_self_info}
+			varieties := []*int{&add_item, &add_basic_item, &apply, &audit_added, &audit_basic, &check_branch_info, &check_record, &check_student_info, &create_new_org, &create_new_manager, &item_anal, &manage_self_info, &import_new_student}
 			idx := 0
 			for a > 0 {
 				if a&1 == 1 {
@@ -254,22 +269,22 @@ func main() {
 		}
 		if account_type == 0 {
 			// 超级管理员
-			set_authorities(0b111110011010)
+			set_authorities(0b0111110011010)
 		} else if account_type == 1 {
 			// 校级管理员
-			set_authorities(0b111110011000)
+			set_authorities(0b0111110011000)
 		} else if account_type == 2 {
 			// 单位管理员
-			set_authorities(0b100000000001)
+			set_authorities(0b0100000000001)
 		} else if account_type == 3 {
 			// 学院管理员
-			set_authorities(0b100010110001)
+			set_authorities(0b0100010110001)
 		} else if account_type == 4 {
 			// 团支部管理员
-			set_authorities(0b100010010000)
+			set_authorities(0b1100010010000)
 		} else if account_type == 5 {
 			// 普通学生
-			set_authorities(0b100001000100)
+			set_authorities(0b0100001000100)
 		}
 
 		c.HTML(http.StatusOK, "home.html", gin.H{
@@ -286,20 +301,21 @@ func main() {
 			"create_new_manager": create_new_manager,
 			"item_anal":          item_anal,
 			"manage_self_info":   manage_self_info,
+			"import_new_student": import_new_student,
 		})
 	})
 
-	r.POST("/home.html", Midware_Auth, func(c *gin.Context) {
+	r.POST("/home.html", Midware_Auth, Authorities(0b111111), func(c *gin.Context) {
 		// 后台页面，需要登录
 		userID := c.GetString("userID")
 		sql := fmt.Sprintf("SELECT * FROM user WHERE userID=\"%s\";", userID)
 		query_res := query(sql)
 		account_type := query_res[0]["account_type"].(int64)
 		var add_item, add_basic_item, apply, audit_added, audit_basic, check_branch_info,
-			check_record, check_student_info, create_new_org, create_new_manager, item_anal, manage_self_info int
+			check_record, check_student_info, create_new_org, create_new_manager, item_anal, manage_self_info, import_new_student int
 		set_authorities := func(a int) {
 			// 根据变量定义顺序，从低位到高位依次赋值
-			varieties := []*int{&add_item, &add_basic_item, &apply, &audit_added, &audit_basic, &check_branch_info, &check_record, &check_student_info, &create_new_org, &create_new_manager, &item_anal, &manage_self_info}
+			varieties := []*int{&add_item, &add_basic_item, &apply, &audit_added, &audit_basic, &check_branch_info, &check_record, &check_student_info, &create_new_org, &create_new_manager, &item_anal, &manage_self_info, &import_new_student}
 			idx := 0
 			for a > 0 {
 				if a&1 == 1 {
@@ -311,22 +327,22 @@ func main() {
 		}
 		if account_type == 0 {
 			// 超级管理员
-			set_authorities(0b111110011010)
+			set_authorities(0b0111110011010)
 		} else if account_type == 1 {
 			// 校级管理员
-			set_authorities(0b111110011000)
+			set_authorities(0b0111110011000)
 		} else if account_type == 2 {
 			// 单位管理员
-			set_authorities(0b100000000001)
+			set_authorities(0b0100000000001)
 		} else if account_type == 3 {
 			// 学院管理员
-			set_authorities(0b100010110001)
+			set_authorities(0b0100010110001)
 		} else if account_type == 4 {
 			// 团支部管理员
-			set_authorities(0b100010010000)
+			set_authorities(0b1100010010000)
 		} else if account_type == 5 {
 			// 普通学生
-			set_authorities(0b100001000100)
+			set_authorities(0b0100001000100)
 		}
 
 		c.HTML(http.StatusOK, "home.html", gin.H{
@@ -343,6 +359,7 @@ func main() {
 			"create_new_manager": create_new_manager,
 			"item_anal":          item_anal,
 			"manage_self_info":   manage_self_info,
+			"import_new_student": import_new_student,
 		})
 	})
 
@@ -354,7 +371,7 @@ func main() {
 		c.Redirect(http.StatusTemporaryRedirect, "/")
 	})
 
-	r.GET("/add_basic_item.html", Midware_Auth, func(c *gin.Context) {
+	r.GET("/add_basic_item.html", Midware_Auth, Authorities(0b000001), func(c *gin.Context) {
 		userID := c.GetString("userID")
 		sql := "SELECT name,score_lower_range,score_higher_range,create_org,description FROM item WHERE type=0;"
 		query_res := query(sql)
@@ -363,7 +380,7 @@ func main() {
 			"added": query_res,
 		})
 	})
-	r.POST("/add_basic_item", Midware_Auth, func(c *gin.Context) {
+	r.POST("/add_basic_item", Midware_Auth, Authorities(0b000001), func(c *gin.Context) {
 		userID := c.GetString("userID")
 		item_name := c.PostForm("name")
 		var msg string
@@ -393,7 +410,7 @@ func main() {
 		})
 	})
 
-	r.GET("/delete_item", Midware_Auth, func(c *gin.Context) {
+	r.GET("/delete_basic_item", Midware_Auth, Authorities(0b000001), func(c *gin.Context) {
 		to_delete := c.Query("name")
 		sql := fmt.Sprintf("DELETE FROM item WHERE name=\"%s\";", to_delete)
 		exec(sql)
@@ -406,7 +423,7 @@ func main() {
 
 	})
 
-	r.GET("/create_new_manager.html", Midware_Auth, func(c *gin.Context) {
+	r.GET("/create_new_manager.html", Midware_Auth, Authorities(0b000001), func(c *gin.Context) {
 		orgs := query("SELECT orgID,name FROM organization;")
 		admins := query("SELECT user.userID AS userID,user.account_type AS account_type, organization.name AS belonging_org FROM user,organization WHERE organization.orgID=user.belonging_org AND (account_type=1 OR account_type=2 OR account_type=3 OR account_type=4);")
 		for _, admin := range admins {
@@ -419,7 +436,7 @@ func main() {
 		})
 	})
 
-	r.POST("/create_new_manager", Midware_Auth, func(c *gin.Context) {
+	r.POST("/create_new_manager", Midware_Auth, Authorities(0b000001), func(c *gin.Context) {
 		name := c.PostForm("name")
 		default_passwd := "123456"
 		admin_type, _ := strconv.Atoi(c.PostForm("type"))
@@ -444,7 +461,7 @@ func main() {
 		})
 	})
 
-	r.GET("/delete_admin", Midware_Auth, func(c *gin.Context) {
+	r.GET("/delete_admin", Midware_Auth, Authorities(0b000001), func(c *gin.Context) {
 		userID := c.Query("userID")
 		sql := fmt.Sprintf("DELETE FROM user WHERE userID=\"%s\"", userID)
 		ok := exec(sql)
@@ -466,13 +483,13 @@ func main() {
 		})
 	})
 
-	r.GET("/manage_self_info.html", Midware_Auth, func(c *gin.Context) {
+	r.GET("/manage_self_info.html", Midware_Auth, Authorities(0b111111), func(c *gin.Context) {
 		c.HTML(http.StatusOK, "manage_self_info.html", gin.H{
 			"msg":    "",
 			"userID": c.GetString("userID"),
 		})
 	})
-	r.POST("/change_passwd", Midware_Auth, func(c *gin.Context) {
+	r.POST("/change_passwd", Midware_Auth, Authorities(0b111111), func(c *gin.Context) {
 		new_passwd := c.PostForm("new_passwd")
 		userID := c.GetString("userID")
 		sql := fmt.Sprintf("UPDATE user SET passwd=\"%s\" WHERE userID=\"%s\"", new_passwd, userID)
@@ -491,7 +508,7 @@ func main() {
 		})
 	})
 
-	r.GET("/create_new_org.html", Midware_Auth, func(c *gin.Context) {
+	r.GET("/create_new_org.html", Midware_Auth, Authorities(0b000011), func(c *gin.Context) {
 		orgs := query("SELECT a.orgID AS orgID,a.name AS name,a.type AS type, b.name AS higher_org FROM organization AS a LEFT JOIN organization AS b WHERE a.higher_org=b.orgID;")
 		for _, org := range orgs {
 			org["type"] = org_type[org["type"].(int64)]
@@ -502,7 +519,7 @@ func main() {
 		})
 	})
 
-	r.POST("/create_new_organization", Midware_Auth, func(c *gin.Context) {
+	r.POST("/create_new_organization", Midware_Auth, Authorities(0b000011), func(c *gin.Context) {
 		org_name := c.PostForm("name")
 		org_mtype := c.PostForm("type")
 		higher_org := c.PostForm("belonging_org")
@@ -541,7 +558,7 @@ func main() {
 		})
 	})
 
-	r.GET("/delete_org", Midware_Auth, func(c *gin.Context) {
+	r.GET("/delete_org", Midware_Auth, Authorities(0b000011), func(c *gin.Context) {
 		to_delete := c.Query("orgID")
 		sql := fmt.Sprintf("DELETE FROM organization WHERE orgID=%s;", to_delete)
 		ok := exec(sql)
@@ -564,7 +581,7 @@ func main() {
 		})
 	})
 
-	r.GET("/check_branch_info.html", Midware_Auth, func(c *gin.Context) {
+	r.GET("/check_branch_info.html", Midware_Auth, Authorities(0b001000), func(c *gin.Context) {
 		userID := c.GetString("userID")
 		sql := fmt.Sprintf("SELECT orgID FROM organization WHERE name=\"%s\"", userID)
 		orgID := query(sql)[0]["orgID"].(int64)
@@ -577,7 +594,7 @@ func main() {
 		})
 	})
 
-	r.POST("/create_new_branch", Midware_Auth, func(c *gin.Context) {
+	r.POST("/create_new_branch", Midware_Auth, Authorities(0b001000), func(c *gin.Context) {
 		collegeID := c.GetString("userID")
 		userID := c.PostForm("name")
 		sql := fmt.Sprintf("SELECT * FROM organization WHERE name=\"%s\";", userID)
@@ -611,7 +628,7 @@ func main() {
 		})
 	})
 
-	r.GET("/delete_branch", Midware_Auth, func(c *gin.Context) {
+	r.GET("/delete_branch", Midware_Auth, Authorities(0b001000), func(c *gin.Context) {
 		to_delete := c.Query("branchID")
 		sql := fmt.Sprintf("DELETE FROM organization WHERE orgID=%s;", to_delete)
 		ok := exec(sql)
@@ -632,6 +649,150 @@ func main() {
 			"msg":      msg,
 			"userID":   collegeID,
 			"branches": branches,
+		})
+	})
+
+	r.GET("/check_student_info.html", Midware_Auth, Authorities(0b011011), func(c *gin.Context) {
+		//根据不同类型的组织查询管辖范围内的学生
+		userID := c.GetString("userID")
+		account_type := c.GetInt64("account_type")
+		var stus []map[string]any
+		var sql string
+		if account_type == 4 {
+			sql = fmt.Sprintf("SELECT user.userID AS name,organization.name AS belonging_org FROM user,organization WHERE user.belonging_org=organization.orgID AND user.userID!=\"%s\" AND organization.name=\"%s\";", userID, userID)
+			stus = query(sql)
+		} else if account_type == 3 {
+			sql = fmt.Sprintf("SELECT orgID from organization WHERE name=\"%s\";", userID)
+			orgID := query(sql)[0]["orgID"].(int64)
+			sql = fmt.Sprintf("SELECT orgID,name from organization WHERE higher_org=%d;", orgID)
+			branches := query(sql)
+			for _, branch := range branches {
+				sql = fmt.Sprintf("SELECT userID AS name FROM user WHERE belonging_org=%d AND userID!=\"%s\";", branch["orgID"].(int64), branch["name"])
+				temp := query(sql)
+				for _, t := range temp {
+					t["belonging_org"] = branch["name"]
+					stus = append(stus, t)
+				}
+			}
+		} else if account_type == 1 || account_type == 0 {
+			sql = "SELECT user.userID AS name,organization.name AS belonging_org FROM user,organization WHERE user.account_type=5 AND user.belonging_org=organization.orgID AND user.userID!=organization.name ;"
+			stus = query(sql)
+		}
+
+		c.HTML(http.StatusOK, "check_student_info.html", gin.H{
+			"msg":  "",
+			"stus": stus,
+		})
+	})
+
+	r.GET("/delete_stu", Midware_Auth, Authorities(0b011011), func(c *gin.Context) {
+		to_delete := c.Query("name")
+		userID := c.GetString("userID")
+		account_type := c.GetInt64("account_type")
+		msg := ""
+		if account_type == 0 || account_type == 1 {
+			// 学校管理员、超级管理员，可删除所有学生
+			sql := fmt.Sprintf("DELETE FROM user WHERE userID=\"%s\";", to_delete)
+			ok := exec(sql)
+			if ok {
+				msg = "删除成功！"
+			} else {
+				msg = "删除失败"
+			}
+		} else if account_type == 3 {
+			// 学院管理员
+			sql := fmt.Sprintf("SELECT belonging_org FROM user WHERE userID=\"%s\";", userID)
+			belonging_branch := query(sql)[0]["belonging_org"].(int64)
+			sql = fmt.Sprintf("SELECT higher_org FROM organization WHERE orgID=%d", belonging_branch)
+			belonging_college := query(sql)[0]["higher_org"].(int64)
+			sql = fmt.Sprintf("SELECT name FROM organization WHERE orgID=%d", belonging_college)
+			college_name := query(sql)[0]["name"].(string)
+			if college_name == userID {
+				sql := fmt.Sprintf("DELETE FROM user WHERE userID=\"%s\";", to_delete)
+				ok := exec(sql)
+				if ok {
+					msg = "删除成功！"
+				} else {
+					msg = "删除失败"
+				}
+			} else {
+				msg = "删除失败：权限不足。"
+			}
+		} else if account_type == 4 {
+			sql := fmt.Sprintf("SELECT belonging_org FROM user WHERE userID=\"%s\";", userID)
+			belonging_branch := query(sql)[0]["belonging_org"].(int64)
+			sql = fmt.Sprintf("SELECT name FROM organization WHERE orgID=%d", belonging_branch)
+			branch_name := query(sql)[0]["name"].(string)
+			if branch_name == userID {
+				sql := fmt.Sprintf("DELETE FROM user WHERE userID=\"%s\";", to_delete)
+				ok := exec(sql)
+				if ok {
+					msg = "删除成功！"
+				} else {
+					msg = "删除失败"
+				}
+			} else {
+				msg = "删除失败：权限不足。"
+			}
+		}
+
+		var stus []map[string]any
+		var sql string
+		if account_type == 4 {
+			sql = fmt.Sprintf("SELECT user.userID AS name,organization.name AS belonging_org FROM user,organization WHERE user.belonging_org=organization.orgID AND user.userID!=\"%s\" AND organization.name=\"%s\";", userID, userID)
+			stus = query(sql)
+		} else if account_type == 3 {
+			sql = fmt.Sprintf("SELECT orgID from organization WHERE name=\"%s\";", userID)
+			orgID := query(sql)[0]["orgID"].(int64)
+			sql = fmt.Sprintf("SELECT orgID,name from organization WHERE higher_org=%d;", orgID)
+			branches := query(sql)
+			for _, branch := range branches {
+				sql = fmt.Sprintf("SELECT userID AS name FROM user WHERE belonging_org=%d AND userID!=\"%s\";", branch["orgID"].(int64), branch["name"])
+				temp := query(sql)
+				for _, t := range temp {
+					t["belonging_org"] = branch["name"]
+					stus = append(stus, t)
+				}
+			}
+		} else if account_type == 1 || account_type == 0 {
+			sql = "SELECT user.userID AS name,organization.name AS belonging_org FROM user,organization WHERE user.account_type=5 AND user.belonging_org=organization.orgID AND user.userID!=organization.name ;"
+			stus = query(sql)
+		}
+
+		c.HTML(http.StatusOK, "check_student_info.html", gin.H{
+			"msg":  msg,
+			"stus": stus,
+		})
+	})
+
+	r.GET("/import_new_student.html", Midware_Auth, Authorities(0b010000), func(c *gin.Context) {
+		c.HTML(http.StatusOK, "import_new_student.html", gin.H{
+			"msg":         "",
+			"branch_name": c.GetString("userID"),
+		})
+	})
+
+	r.POST("/import_student", Midware_Auth, func(c *gin.Context) {
+		userID := c.GetString("userID")
+		sql := fmt.Sprintf("SELECT orgID FROM organization WHERE name=\"%s\";", userID)
+		orgID := query(sql)[0]["orgID"].(int64)
+		student_name := c.PostForm("name")
+		sql = fmt.Sprintf("SELECT * FROM user WHERE userID=\"%s\";", student_name)
+		msg := ""
+		if len(query(sql)) > 0 {
+			msg = "添加失败：重复名称！"
+		} else {
+			sql = fmt.Sprintf("INSERT INTO user VALUES(\"%s\",\"123456\",5,%d);", student_name, orgID)
+			ok := exec(sql)
+			if ok {
+				msg = "添加成功！"
+			} else {
+				msg = "添加失败"
+			}
+		}
+		c.HTML(http.StatusOK, "import_new_student.html", gin.H{
+			"msg":         msg,
+			"branch_name": userID,
 		})
 	})
 

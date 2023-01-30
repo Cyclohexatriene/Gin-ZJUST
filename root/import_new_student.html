@@ -1,0 +1,17 @@
+<html>
+<head><title>查看学生信息</title></head>
+<body>
+<h1>{{.msg}}</h1>
+<h1>导入学生</h1>
+新导入学生默认密码为123456
+<br><br>
+<form action="import_student" method="POST">
+    学号: <input name="name">
+    <br>
+    所属团支部：{{.branch_name}}
+    <br>
+    <input type="submit" value="导入">
+</form>
+<a href="home.html">返回</a>
+</body>
+</html>

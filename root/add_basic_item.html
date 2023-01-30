@@ -28,7 +28,7 @@
         <td align="center">{{$value.name}}</td>
         <td align="center">{{$value.score_lower_range}} - {{$value.score_higher_range}}</td>
         <td>{{$value.description}}</td>
-        <td><a href={{strcat "/delete_item?name=" $value.name}}>删除</a></td>
+        <td><a href={{strcat "/delete_basic_item?name=" $value.name}}>删除</a></td>
     </tr>
     {{end}}
 </table>

@@ -36,6 +36,10 @@
     <a href = "check_student_info.html">查看学生信息</a>
 {{end}}
 
+{{if eq .import_new_student 1}}
+    <a href = "import_new_student.html">学生信息导入</a>
+{{end}}
+
 {{if eq .create_new_org 1}}
     <a href = "create_new_org.html">创建单位</a>
 {{end}}
