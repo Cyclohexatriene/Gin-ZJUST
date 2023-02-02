@@ -1,1 +1,24 @@
-项目申请
+<html>
+<head><title>项目申请</title></head>
+<body>
+<h1>{{.msg}}</h1>
+
+<h1>项目列表：</h1>
+<table border="1" style="border-collapse: collapse;">
+    <caption>
+        <th>项目名称</th>
+        <th>项目类型</th>
+        <th>分值范围</th>
+        <th>操作</th>
+    </caption>
+    {{range $idx, $item := .items}}
+    <tr>
+        <td align="center">{{$item.name}}</td>
+        <td align="center">{{$item.type}}</td>
+        <td align="center">{{$item.score_lower_range}} - {{$item.score_higher_range}}</td>
+        <td align="center"><a href={{strcat1 "/item_info?itemID=" $item.itemID}}>申请</a></td>
+    </tr>
+    {{end}}
+</table>
+</body>
+</html>

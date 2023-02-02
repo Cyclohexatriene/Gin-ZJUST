@@ -1,0 +1,55 @@
+<html>
+<head><title>申请详情</title></head>
+<body>
+<h1>{{.msg}}</h1>
+<h1>项目详情</h1>
+<table border="1" style="border-collapse: collapse;">
+    <caption>
+        <th>项目名称</th>
+        <th>项目类型</th>
+        <th>记点范围</th>
+        <th>创建单位</th>
+        <th>申请事项</th>
+    </caption>
+    <tr>
+        <td align="center">{{.item.name}}</td>
+        <td align="center">{{.item.type}}</td>
+        <td align="center">{{.item.score_lower_range}} -  {{.item.score_higher_range}}</td>
+        <td align="center">{{.item.create_org}}</td>
+        <td align="center">{{.item.description}}</td>
+    </tr>
+</table>
+<h1>申请详情</h1>
+<table border="1" style="border-collapse: collapse;">
+    <caption>
+        <th>申请用户</th>
+        <th>申请记点</th>
+        <th>项目状态</th>
+        <th>申请内容</th>
+        <th>附件</th>
+    </caption>
+    <tr>
+        <td align="center">{{.appliance.userID}}</td>
+        <td align="center">{{.appliance.score}}</td>
+        <td align="center">{{.appliance.status}}</td>
+        <td align="center">{{.appliance.description}}</td>
+        <td align="center">附件s</td>
+    </tr>
+</table>
+<h1>操作记录</h1>
+<table border="1" style="border-collapse: collapse;">
+    <caption>
+        <th>操作者</th>
+        <th>操作时间</th>
+        <th>操作内容</th>
+    </caption>
+    {{range $idx, $record := .records}}
+    <tr>
+        <td align="center">{{$record.operator}}</td>
+        <td align="center">{{$record.time}}</td>
+        <td align="center">{{$record.operation}}</td>
+    </tr>
+    {{end}}
+</table>
+</body>
+</html>

@@ -1,1 +1,26 @@
-查看申请记录
+<html>
+<head><title>申请记录</title></head>
+<body>
+<h1>{{.msg}}</h1>
+<h1>申请记录：</h1>
+第二课堂共计 {{.sum2}} 记点，第三课堂共计 {{.sum3}} 记点。<br><br>
+<table border="1" style="border-collapse: collapse;">
+    <caption>
+        <th>项目名称</th>
+        <th>项目类型</th>
+        <th>申请分数</th>
+        <th>项目状态</th>
+        <th>操作</th>
+    </caption>
+    {{range $idx, $appliance := .appliances}}
+    <tr>
+        <td align="center">{{$appliance.name}}</td>
+        <td align="center">{{$appliance.type}}</td>
+        <td align="center">{{$appliance.score}}</td>
+        <td align="center">{{$appliance.status}}</td>
+        <td align="center"><a href={{strcat1 "/appliance_detail?applianceID=" $appliance.applianceID}}>查看详情</a><br><a href={{strcat1 "/delete_appliance?applianceID=" $appliance.applianceID}}>撤销申请</a></td>
+    </tr>
+    {{end}}
+</table>
+</body>
+</html>

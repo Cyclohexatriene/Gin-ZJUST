@@ -1,10 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"math/rand"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -173,6 +175,23 @@ func main() {
 		1: "单位",
 		2: "学院",
 		3: "团支部",
+	}
+
+	item_types := map[int64]string{
+		0: "第二课堂",
+		1: "第三课堂",
+		2: "第二课堂",
+		3: "第三课堂",
+	}
+
+	appliance_status := map[int64]string{
+		0: "团支部待审核",
+		1: "团支部审核通过",
+		2: "团支部审核不通过",
+		3: "学院审核通过",
+		4: "学院审核不通过",
+		5: "学校审核通过",
+		6: "学校审核不通过",
 	}
 
 	r.LoadHTMLGlob("root/*") // 加载HTML模板根目录
@@ -793,6 +812,173 @@ func main() {
 		c.HTML(http.StatusOK, "import_new_student.html", gin.H{
 			"msg":         msg,
 			"branch_name": userID,
+		})
+	})
+
+	r.GET("/apply.html", Midware_Auth, Authorities(0b100000), func(c *gin.Context) {
+		sql := "SELECT * FROM item WHERE type=0 OR type=1;"
+		items := query(sql)
+		for _, item := range items {
+			item["type"] = item_types[item["type"].(int64)]
+		}
+		c.HTML(http.StatusOK, "apply.html", gin.H{
+			"msg":   "",
+			"items": items,
+		})
+	})
+
+	r.GET("/item_info", Midware_Auth, Authorities(0b100000), func(c *gin.Context) {
+		itemID, _ := strconv.Atoi(c.Query("itemID"))
+		sql := fmt.Sprintf("SELECT * from item WHERE itemID=%d", itemID)
+		msg := ""
+		item := query(sql)
+		if len(item) == 0 {
+			msg = "项目不存在！"
+			c.HTML(http.StatusOK, "item_info.html", gin.H{
+				"msg": msg,
+			})
+		} else {
+			c.HTML(http.StatusOK, "item_info.html", gin.H{
+				"msg":  msg,
+				"item": item[0],
+			})
+		}
+	})
+
+	r.POST("/apply_item", Midware_Auth, Authorities(0b100000), func(c *gin.Context) {
+		itemID := c.Query("ID")
+		userID := c.GetString("userID")
+		description := c.PostForm("description")
+		cur_time := time.Now().Unix()
+		sql := fmt.Sprintf("SELECT * FROM appliance WHERE userID=\"%s\" AND time_unix=%d;", userID, cur_time)
+		msg := ""
+		if len(query(sql)) > 0 {
+			msg = "操作过于频繁，请稍候再试！"
+		} else {
+			sql = fmt.Sprintf("INSERT INTO appliance VALUES(NULL,%s,\"%s\",0,0,\"[]\",%d,\"%s\");", itemID, userID, cur_time, description)
+			ok := exec(sql)
+			if ok {
+				form, _ := c.MultipartForm()
+				files := form.File
+				path := fmt.Sprintf("upload/%s/%d/", userID, cur_time)
+				_, err := os.Stat(path)
+				if os.IsNotExist(err) {
+					os.MkdirAll(path, os.ModePerm)
+				}
+				for _, file := range files {
+					f, _ := file[0].Open()
+					defer f.Close()
+					c.SaveUploadedFile(file[0], path+file[0].Filename)
+				}
+				msg = "申请成功！"
+			} else {
+				msg = "申请失败"
+			}
+		}
+
+		sql = fmt.Sprintf("SELECT * from item WHERE itemID=%s", itemID)
+		item := query(sql)
+		c.HTML(http.StatusOK, "item_info.html", gin.H{
+			"msg":  msg,
+			"item": item[0],
+		})
+	})
+
+	r.GET("/check_record.html", Midware_Auth, Authorities(0b100000), func(c *gin.Context) {
+		userID := c.GetString("userID")
+		sql := fmt.Sprintf("SELECT appliance.applianceID AS applianceID,item.name AS name,item.type AS type,appliance.score AS score,appliance.status AS status,appliance.record AS record,appliance.time_unix AS time_unix FROM appliance,item WHERE appliance.userID=\"%s\" AND appliance.itemID=item.itemID;", userID)
+		appliances := query(sql)
+		var sum2, sum3 float64
+		for _, appliance := range appliances {
+			if appliance["type"].(int64)%2 == 0 {
+				sum2 += appliance["score"].(float64)
+			} else {
+				sum3 += appliance["score"].(float64)
+			}
+			appliance["type"] = item_types[appliance["type"].(int64)]
+			appliance["status"] = appliance_status[appliance["status"].(int64)]
+
+		}
+		c.HTML(http.StatusOK, "check_record.html", gin.H{
+			"msg":        "",
+			"appliances": appliances,
+			"sum2":       sum2,
+			"sum3":       sum3,
+		})
+	})
+
+	r.GET("/appliance_detail", Midware_Auth, Authorities(0b100000), func(c *gin.Context) {
+		userID := c.GetString("userID")
+		applianceID := c.Query("applianceID")
+		sql := fmt.Sprintf("SELECT * FROM appliance WHERE applianceID=%s", applianceID)
+		appliance := query(sql)
+		msg := ""
+		if len(appliance) == 0 {
+			msg = "项目不存在！"
+			c.HTML(http.StatusOK, "appliance_detail.html", gin.H{
+				"msg": msg,
+			})
+		} else if appliance[0]["userID"].(string) != userID {
+			msg = "非本人项目！"
+			c.HTML(http.StatusOK, "appliance_detail.html", gin.H{
+				"msg": msg,
+			})
+		} else {
+			appliance[0]["status"] = appliance_status[appliance[0]["status"].(int64)]
+			itemID := appliance[0]["itemID"].(int64)
+			sql = fmt.Sprintf("SELECT * FROM item WHERE itemID=%d", itemID)
+			item := query(sql)[0]
+			records_json := appliance[0]["record"].(string)
+			records := []map[string]any{}
+			json.Unmarshal([]byte(records_json), &records)
+			c.HTML(http.StatusOK, "appliance_detail.html", gin.H{
+				"msg":       msg,
+				"item":      item,
+				"appliance": appliance[0],
+				"records":   records,
+			})
+		}
+	})
+
+	r.GET("/delete_appliance", Midware_Auth, Authorities(0b100000), func(c *gin.Context) {
+		userID := c.GetString("userID")
+		applianceID := c.Query("applianceID")
+		sql := fmt.Sprintf("SELECT * FROM appliance WHERE applianceID=%s", applianceID)
+		appliance := query(sql)
+		msg := ""
+		if len(appliance) == 0 {
+			msg = "项目不存在！"
+		} else if appliance[0]["userID"].(string) != userID {
+			msg = "非本人项目！"
+		} else {
+			sql = fmt.Sprintf("DELETE FROM appliance WHERE applianceID=%s", applianceID)
+			ok := exec(sql)
+			if ok {
+				msg = "删除成功！"
+				// 同时删除硬盘中存放的附件
+			} else {
+				msg = "删除失败！"
+			}
+		}
+
+		sql = fmt.Sprintf("SELECT appliance.applianceID AS applianceID,item.name AS name,item.type AS type,appliance.score AS score,appliance.status AS status,appliance.record AS record,appliance.time_unix AS time_unix FROM appliance,item WHERE appliance.userID=\"%s\" AND appliance.itemID=item.itemID;", userID)
+		appliances := query(sql)
+		var sum2, sum3 float64
+		for _, appliance := range appliances {
+			if appliance["type"].(int64)%2 == 0 {
+				sum2 += appliance["score"].(float64)
+			} else {
+				sum3 += appliance["score"].(float64)
+			}
+			appliance["type"] = item_types[appliance["type"].(int64)]
+			appliance["status"] = appliance_status[appliance["status"].(int64)]
+
+		}
+		c.HTML(http.StatusOK, "check_record.html", gin.H{
+			"msg":        msg,
+			"appliances": appliances,
+			"sum2":       sum2,
+			"sum3":       sum3,
 		})
 	})
 
