@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"os"
@@ -151,12 +152,17 @@ func strcat1(a string, b int64) string {
 	c := int(b)
 	return a + strconv.Itoa(c)
 }
+func get_file_name(a string) string {
+	b := strings.Split(a, "/")
+	return b[len(b)-1]
+}
 
 func main() {
 	r := gin.Default()
 	r.SetFuncMap(template.FuncMap{
-		"strcat":  strcat,
-		"strcat1": strcat1,
+		"strcat":        strcat,
+		"strcat1":       strcat1,
+		"get_file_name": get_file_name,
 	})
 	rand.Seed(time.Now().Unix())            // 服务器每次重启根据当前时间重置随机数种子
 	db, _ = sqlx.Open("sqlite3", "data.db") // 打开数据库
@@ -931,11 +937,22 @@ func main() {
 			records_json := appliance[0]["record"].(string)
 			records := []map[string]any{}
 			json.Unmarshal([]byte(records_json), &records)
+			time := appliance[0]["time_unix"].(int64)
+			path := "upload/" + userID + "/" + strconv.Itoa(int(time)) + "/"
+			dir, _ := ioutil.ReadDir(path)
+			paths := []string{}
+			for _, file := range dir {
+				if !file.IsDir() {
+					paths = append(paths, path+file.Name())
+				}
+			}
+
 			c.HTML(http.StatusOK, "appliance_detail.html", gin.H{
 				"msg":       msg,
 				"item":      item,
 				"appliance": appliance[0],
 				"records":   records,
+				"paths":     paths,
 			})
 		}
 	})
@@ -980,6 +997,21 @@ func main() {
 			"sum2":       sum2,
 			"sum3":       sum3,
 		})
+	})
+	r.GET("/get_file", Midware_Auth, func(c *gin.Context) {
+		path := c.Query("path")
+		fields := strings.Split(path, "/")
+		if fields[0] != "upload" {
+			c.AbortWithStatus(http.StatusNotFound)
+			return
+		}
+		userID := c.GetString("userID")
+		userID_get := fields[1]
+		if userID != userID_get {
+			c.AbortWithStatusJSON(http.StatusNotFound, "{\"error\":\"权限不足！\"}")
+			return
+		}
+		c.File(path)
 	})
 
 	r.Run(":4203") // Listening at http://localhost:4203

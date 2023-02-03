@@ -33,7 +33,11 @@
         <td align="center">{{.appliance.score}}</td>
         <td align="center">{{.appliance.status}}</td>
         <td align="center">{{.appliance.description}}</td>
-        <td align="center">附件s</td>
+        <td align="center">
+            {{range $idx, $path := .paths}}
+            <a href={{strcat "/get_file?path=" $path}}>{{get_file_name $path}}</a><br>
+            {{end}}
+        </td>
     </tr>
 </table>
 <h1>操作记录</h1>

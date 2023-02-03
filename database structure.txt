@@ -1,0 +1,39 @@
+user表： // 用户
+CREATE TABLE user(
+    userID TEXT PRIMARY KEY NOT NULL,
+    passwd TEXT NOT NULL,
+    account_type INT NOT NULL, 0：超级管理员 1：校级管理员 2：单位管理员 3：学院管理员 4：团支部管理员 5：学生
+    belonging_org INT NOT NULL
+);
+
+organization表：// 组织
+CREATE TABLE organization(
+    orgID INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    type INT NOT NULL, 0：学校 1：单位 2：学院 3：团支部
+    higher_org INT
+);
+
+appliance表：// 申请
+CREATE TABLE appliance(
+    applianceID INTEGER PRIMARY KEY AUTOINCREMENT,
+    itemID INT NOT NULL,
+    userID TEXT NOT NULL,
+    score REAL,
+    status INT, // 0: 团支部待审核 1: 团支部审核通过 2: 团支部审核不通过 3: 学院审核通过 4: 学院审核不通过 5: 学校审核通过 6: 学校审核不通过
+    record TEXT, // 审核记录，字段：operator（操作者）、time（时间，以UNIX时间戳记录）、operation（操作详情）
+    description TEXT,
+    time_unix INT
+);
+
+item表：// 项目
+CREATE TABLE item(
+    itemID INTEGER PRIMARY KEY AUTOINCREMENT,
+    type INT NOT NULL, // 0：基础项目第二课堂，1: 基础项目第三课堂， 2：立项项目第二课堂，3：立项项目第三课堂
+    status INT, // 0: 基础项目, 1: 待审核, 2：预审核通过, 3：预审核不通过, 4：审核通过, 5：审核不通过
+    name TEXT NOT NULL,
+    score_lower_range REAL,
+    score_higher_range REAL,
+    create_org TEXT,
+    description TEXT
+);
