@@ -1,0 +1,37 @@
+<html>
+<head><title>基础项目审核</title></head>
+<body>
+
+<h1>项目详情</h1>
+<table border="1" style="border-collapse: collapse;">
+    <caption>
+        <th>申请人</th>
+        <th>申请项目</th>
+        <th>项目类型</th>
+        <th>申请记点</th>
+        <th>申请事项</th>
+        <th>项目状态</th>
+    </caption>
+    <tr>
+        <td align="center">{{.appliance.userID}}</td>
+        <td align="center">{{.appliance.item}}</td>
+        <td align="center">{{.appliance.type}}</td>
+        <td align="center">{{.appliance.score}}</td>
+        <td align="center">{{.appliance.description}}</td>
+        <td align="center">{{.appliance.status}}</td>
+    </tr>
+</table>
+<h1>审核</h1>
+<form action={{strcat1 "/audit_basic_item?applianceID=" .appliance.applianceID}} method="POST">
+    <select name="option">
+        <option value="1">审核通过</option>
+        <option value="2">审核不通过</option>
+    </select>
+    <br>
+    审核意见：
+    <input name="opinion"/>
+    <br>
+    <input type="submit" value="提交">
+</form>
+</body>
+</html>

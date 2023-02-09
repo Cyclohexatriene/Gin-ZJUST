@@ -1,1 +1,30 @@
-基础项目审核
+<html>
+<head><title>基础项目审核</title></head>
+<body>
+<h1>共 {{.to_audit_sum}} 个项目待审核。</h1>
+
+<h1>项目信息</h1>
+<table border="1" style="border-collapse: collapse;">
+    <caption>
+        <th>申请人</th>
+        <th>申请项目</th>
+        <th>项目类型</th>
+        <th>申请记点</th>
+        <th>申请事项</th>
+        <th>项目状态</th>
+        <th>操作</th>
+    </caption>
+    {{range $idx, $appliance := .appliances}}
+    <tr>
+        <td align="center">{{$appliance.userID}}</td>
+        <td align="center">{{$appliance.item}}</td>
+        <td align="center">{{$appliance.type}}</td>
+        <td align="center">{{$appliance.score}}</td>
+        <td align="center">{{$appliance.description}}</td>
+        <td align="center">{{$appliance.status}}</td>
+        <td align="center"><a href={{strcat1 "/audit_detail?applianceID=" $appliance.applianceID}}>审核</a></td>
+    </tr>
+    {{end}}
+</table>
+</body>
+</html>

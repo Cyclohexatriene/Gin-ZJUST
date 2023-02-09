@@ -200,6 +200,13 @@ func main() {
 		6: "学校审核不通过",
 	}
 
+	to_audit_map := map[int64]int64{ // 管理员类型 to 可操作项目状态
+		0: 3,
+		1: 3, //校级管理员和超级管理员可审核学院审核已通过的项目
+		3: 1, //学院管理员可审核团支部审核已通过的项目
+		4: 0, //团支部管理员可审核尚未进行团支部审核的项目
+	}
+
 	r.LoadHTMLGlob("root/*") // 加载HTML模板根目录
 
 	r.GET("/", func(c *gin.Context) {
@@ -896,10 +903,12 @@ func main() {
 		appliances := query(sql)
 		var sum2, sum3 float64
 		for _, appliance := range appliances {
-			if appliance["type"].(int64)%2 == 0 {
-				sum2 += appliance["score"].(float64)
-			} else {
-				sum3 += appliance["score"].(float64)
+			if appliance["status"].(int64) == 5 {
+				if appliance["type"].(int64)%2 == 0 {
+					sum2 += appliance["score"].(float64)
+				} else {
+					sum3 += appliance["score"].(float64)
+				}
 			}
 			appliance["type"] = item_types[appliance["type"].(int64)]
 			appliance["status"] = appliance_status[appliance["status"].(int64)]
@@ -1002,7 +1011,7 @@ func main() {
 		path := c.Query("path")
 		fields := strings.Split(path, "/")
 		if fields[0] != "upload" {
-			c.AbortWithStatus(http.StatusNotFound)
+			c.AbortWithStatusJSON(http.StatusNotFound, "{\"error\":\"路径有误！\"}")
 			return
 		}
 		userID := c.GetString("userID")
@@ -1012,6 +1021,237 @@ func main() {
 			return
 		}
 		c.File(path)
+	})
+
+	r.GET("/audit_basic.html", Midware_Auth, Authorities(0b011011), func(c *gin.Context) {
+		// 根据不同管理员类型检索出管辖范围内的学生
+		userID := c.GetString("userID")
+		account_type := c.GetInt64("account_type")
+		var stus []map[string]any
+		var sql string
+		if account_type == 4 {
+			sql = fmt.Sprintf("SELECT user.userID AS name,organization.name AS belonging_org FROM user,organization WHERE user.belonging_org=organization.orgID AND user.userID!=\"%s\" AND organization.name=\"%s\";", userID, userID)
+			stus = query(sql)
+		} else if account_type == 3 {
+			sql = fmt.Sprintf("SELECT orgID from organization WHERE name=\"%s\";", userID)
+			orgID := query(sql)[0]["orgID"].(int64)
+			sql = fmt.Sprintf("SELECT orgID,name from organization WHERE higher_org=%d;", orgID)
+			branches := query(sql)
+			for _, branch := range branches {
+				sql = fmt.Sprintf("SELECT userID AS name FROM user WHERE belonging_org=%d AND userID!=\"%s\";", branch["orgID"].(int64), branch["name"])
+				temp := query(sql)
+				for _, t := range temp {
+					t["belonging_org"] = branch["name"]
+					stus = append(stus, t)
+				}
+			}
+		} else if account_type == 1 || account_type == 0 {
+			sql = "SELECT user.userID AS name,organization.name AS belonging_org FROM user,organization WHERE user.account_type=5 AND user.belonging_org=organization.orgID AND user.userID!=organization.name ;"
+			stus = query(sql)
+		}
+
+		// 检索所有需要审核的申请
+
+		appliances := []map[string]any{}
+		to_audit := to_audit_map[account_type]
+		for _, stu := range stus {
+			sql = fmt.Sprintf("SELECT ap.applianceID AS applianceID,ap.userID AS userID,item.name AS item,item.type AS type,ap.score AS score,ap.description AS description,ap.status AS status FROM appliance AS ap,item WHERE ap.itemID=item.itemID AND ap.status=%d AND ap.userID=\"%s\";", to_audit, stu["name"])
+			temp := query(sql)
+			appliances = append(appliances, temp...)
+		}
+
+		aps := []map[string]any{}
+		for _, ap := range appliances {
+			ap["type"] = item_types[ap["type"].(int64)]
+			ap["status"] = appliance_status[ap["status"].(int64)]
+			aps = append(aps, ap)
+		}
+		c.HTML(http.StatusOK, "audit_basic.html", gin.H{
+			"msg":          "",
+			"to_audit_sum": len(aps),
+			"appliances":   aps,
+		})
+
+	})
+
+	r.POST("/audit_basic.html", Midware_Auth, Authorities(0b011011), func(c *gin.Context) {
+		// 根据不同管理员类型检索出管辖范围内的学生
+		userID := c.GetString("userID")
+		account_type := c.GetInt64("account_type")
+		var stus []map[string]any
+		var sql string
+		if account_type == 4 {
+			sql = fmt.Sprintf("SELECT user.userID AS name,organization.name AS belonging_org FROM user,organization WHERE user.belonging_org=organization.orgID AND user.userID!=\"%s\" AND organization.name=\"%s\";", userID, userID)
+			stus = query(sql)
+		} else if account_type == 3 {
+			sql = fmt.Sprintf("SELECT orgID from organization WHERE name=\"%s\";", userID)
+			orgID := query(sql)[0]["orgID"].(int64)
+			sql = fmt.Sprintf("SELECT orgID,name from organization WHERE higher_org=%d;", orgID)
+			branches := query(sql)
+			for _, branch := range branches {
+				sql = fmt.Sprintf("SELECT userID AS name FROM user WHERE belonging_org=%d AND userID!=\"%s\";", branch["orgID"].(int64), branch["name"])
+				temp := query(sql)
+				for _, t := range temp {
+					t["belonging_org"] = branch["name"]
+					stus = append(stus, t)
+				}
+			}
+		} else if account_type == 1 || account_type == 0 {
+			sql = "SELECT user.userID AS name,organization.name AS belonging_org FROM user,organization WHERE user.account_type=5 AND user.belonging_org=organization.orgID AND user.userID!=organization.name ;"
+			stus = query(sql)
+		}
+
+		// 检索所有需要审核的申请
+
+		appliances := []map[string]any{}
+		to_audit := to_audit_map[account_type]
+		for _, stu := range stus {
+			sql = fmt.Sprintf("SELECT ap.applianceID AS applianceID,ap.userID AS userID,item.name AS item,item.type AS type,ap.score AS score,ap.description AS description,ap.status AS status FROM appliance AS ap,item WHERE ap.itemID=item.itemID AND ap.status=%d AND ap.userID=\"%s\";", to_audit, stu["name"])
+			temp := query(sql)
+			appliances = append(appliances, temp...)
+		}
+
+		aps := []map[string]any{}
+		for _, ap := range appliances {
+			ap["type"] = item_types[ap["type"].(int64)]
+			ap["status"] = appliance_status[ap["status"].(int64)]
+			aps = append(aps, ap)
+		}
+		c.HTML(http.StatusOK, "audit_basic.html", gin.H{
+			"msg":          "",
+			"to_audit_sum": len(aps),
+			"appliances":   aps,
+		})
+
+	})
+
+	r.GET("/audit_detail", Midware_Auth, Authorities(0b011011), func(c *gin.Context) {
+		// 检验是否有审核权限(是否属于同一级审核、是否处于对应组织管理下)
+		userID := c.GetString("userID")
+		sql := fmt.Sprintf("SELECT * FROM user WHERE userID=\"%s\";", userID)
+		admin_org := query(sql)[0]["belonging_org"].(int64)
+		account_type := c.GetInt64("account_type")
+		applianceID := c.Query("applianceID")
+		sql = fmt.Sprintf("SELECT * FROM appliance WHERE applianceID=%s;", applianceID)
+		appliance := query(sql)
+		if len(appliance) == 0 {
+			c.AbortWithStatusJSON(http.StatusNotFound, "{\"error\":\"申请不存在！\"}")
+			return
+		}
+		can_audit_status, ok := to_audit_map[account_type]
+		if !ok || can_audit_status != appliance[0]["status"].(int64) {
+			c.AbortWithStatusJSON(http.StatusNotFound, "{\"error\":\"权限不足！\"}")
+			return
+		}
+		to_audit_user := appliance[0]["userID"].(string)
+		sql = fmt.Sprintf("SELECT * FROM user WHERE userID=\"%s\";", to_audit_user)
+		user_info := query(sql)[0]
+		branchID := user_info["belonging_org"].(int64)
+		if account_type == 4 && admin_org != branchID {
+			c.AbortWithStatusJSON(http.StatusNotFound, "{\"error\":\"权限不足！\"}")
+			return
+		}
+		if account_type == 3 {
+			sql = fmt.Sprintf("SELECT * FROM organization WHERE orgID=%d;", branchID)
+			query_res := query(sql)[0]
+			collegeID := query_res["higher_org"].(int64)
+			if admin_org != collegeID {
+				c.AbortWithStatusJSON(http.StatusNotFound, "{\"error\":\"权限不足！\"}")
+				return
+			}
+		}
+		sql = fmt.Sprintf("SELECT ap.applianceID AS applianceID,ap.userID AS userID, item.name AS item, item.type AS type, ap.score AS score, ap.description AS description, ap.status AS status FROM appliance as ap,item WHERE ap.itemID=item.itemID AND ap.applianceID=%s;", applianceID)
+		ap := query(sql)[0]
+		ap["status"] = appliance_status[ap["status"].(int64)]
+		ap["type"] = item_types[ap["type"].(int64)]
+		c.HTML(http.StatusOK, "audit_detail.html", gin.H{
+			"appliance": ap,
+		})
+	})
+
+	r.POST("/audit_basic_item", Midware_Auth, Authorities(0b011011), func(c *gin.Context) {
+		// 检验是否有审核权限(是否属于同一级审核、是否处于对应组织管理下)
+		userID := c.GetString("userID")
+		sql := fmt.Sprintf("SELECT * FROM user WHERE userID=\"%s\";", userID)
+		admin_org := query(sql)[0]["belonging_org"].(int64)
+		account_type := c.GetInt64("account_type")
+		applianceID := c.Query("applianceID")
+		sql = fmt.Sprintf("SELECT * FROM appliance WHERE applianceID=%s;", applianceID)
+		appliance := query(sql)
+		operation := ""
+		if len(appliance) == 0 {
+			c.AbortWithStatusJSON(http.StatusNotFound, "{\"error\":\"申请不存在！\"}")
+			return
+		}
+		can_audit_status, ok := to_audit_map[account_type]
+		if !ok || can_audit_status != appliance[0]["status"].(int64) {
+			c.AbortWithStatusJSON(http.StatusNotFound, "{\"error\":\"权限不足！\"}")
+			return
+		}
+		to_audit_user := appliance[0]["userID"].(string)
+		sql = fmt.Sprintf("SELECT * FROM user WHERE userID=\"%s\";", to_audit_user)
+		user_info := query(sql)[0]
+		branchID := user_info["belonging_org"].(int64)
+		if account_type == 4 {
+			if admin_org != branchID {
+				c.AbortWithStatusJSON(http.StatusNotFound, "{\"error\":\"权限不足！\"}")
+				return
+			}
+			operation += "团支部"
+		}
+		if account_type == 3 {
+			sql = fmt.Sprintf("SELECT * FROM organization WHERE orgID=%d;", branchID)
+			query_res := query(sql)[0]
+			collegeID := query_res["higher_org"].(int64)
+			if admin_org != collegeID {
+				c.AbortWithStatusJSON(http.StatusNotFound, "{\"error\":\"权限不足！\"}")
+				return
+			}
+			operation += "学院"
+		}
+		if account_type == 0 || account_type == 1 {
+			operation += "学校"
+		}
+		sql = fmt.Sprintf("SELECT ap.applianceID AS applianceID,ap.userID AS userID, item.name AS item, item.type AS type, ap.score AS score, ap.description AS description, ap.status AS status,ap.record AS record FROM appliance as ap,item WHERE ap.itemID=item.itemID AND ap.applianceID=%s;", applianceID)
+		ap := query(sql)[0]
+
+		record_str := ap["record"].(string)
+		record := []map[string]any{}
+		audit_status := c.PostForm("option")
+		status := -1
+		if audit_status == "1" {
+			operation += "审核通过："
+			if account_type == 0 || account_type == 1 {
+				status = 5
+			} else if account_type == 3 {
+				status = 3
+			} else if account_type == 4 {
+				status = 1
+			}
+		} else {
+			operation += "审核不通过："
+			if account_type == 0 || account_type == 1 {
+				status = 6
+			} else if account_type == 3 {
+				status = 4
+			} else if account_type == 4 {
+				status = 2
+			}
+		}
+		audit_opinion := c.PostForm("opinion")
+		operation += audit_opinion
+		json.Unmarshal([]byte(record_str), &record)
+		record = append(record, map[string]any{
+			"operator":  userID,
+			"time":      time.Now().Unix(),
+			"operation": operation,
+		})
+		json, _ := json.Marshal(record)
+		record_str = string(json)
+		sql = fmt.Sprintf("UPDATE appliance SET status=%d,record='%s' WHERE applianceID=%s;", status, record_str, applianceID)
+		fmt.Println(sql)
+		exec(sql)
+		c.Redirect(http.StatusTemporaryRedirect, "audit_basic.html")
 	})
 
 	r.Run(":4203") // Listening at http://localhost:4203
