@@ -1165,7 +1165,8 @@ func main() {
 		ap["status"] = appliance_status[ap["status"].(int64)]
 		ap["type"] = item_types[ap["type"].(int64)]
 		c.HTML(http.StatusOK, "audit_detail.html", gin.H{
-			"appliance": ap,
+			"appliance":    ap,
+			"account_type": account_type,
 		})
 	})
 
@@ -1179,6 +1180,7 @@ func main() {
 		sql = fmt.Sprintf("SELECT * FROM appliance WHERE applianceID=%s;", applianceID)
 		appliance := query(sql)
 		operation := ""
+		var score float64 = -1
 		if len(appliance) == 0 {
 			c.AbortWithStatusJSON(http.StatusNotFound, "{\"error\":\"申请不存在！\"}")
 			return
@@ -1208,6 +1210,7 @@ func main() {
 				return
 			}
 			operation += "学院"
+			score, _ = strconv.ParseFloat(c.PostForm("score"), 64)
 		}
 		if account_type == 0 || account_type == 1 {
 			operation += "学校"
@@ -1243,16 +1246,22 @@ func main() {
 		json.Unmarshal([]byte(record_str), &record)
 		record = append(record, map[string]any{
 			"operator":  userID,
-			"time":      time.Now().Unix(),
+			"time":      strconv.Itoa(int(time.Now().Unix())),
 			"operation": operation,
 		})
 		json, _ := json.Marshal(record)
 		record_str = string(json)
-		sql = fmt.Sprintf("UPDATE appliance SET status=%d,record='%s' WHERE applianceID=%s;", status, record_str, applianceID)
-		fmt.Println(sql)
+		if account_type == 3 {
+			sql = fmt.Sprintf("UPDATE appliance SET status=%d,record='%s',score=%.1f WHERE applianceID=%s;", status, record_str, score, applianceID)
+		} else {
+			sql = fmt.Sprintf("UPDATE appliance SET status=%d,record='%s' WHERE applianceID=%s;", status, record_str, applianceID)
+		}
+
 		exec(sql)
 		c.Redirect(http.StatusTemporaryRedirect, "audit_basic.html")
 	})
+
+	// todo : 赋分
 
 	r.Run(":4203") // Listening at http://localhost:4203
 }

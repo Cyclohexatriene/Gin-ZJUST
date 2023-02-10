@@ -28,6 +28,10 @@
         <option value="2">审核不通过</option>
     </select>
     <br>
+    {{if eq .account_type 3}}
+    申请分数：<input name="score" />
+    {{end}}
+    <br>
     审核意见：
     <input name="opinion"/>
     <br>
