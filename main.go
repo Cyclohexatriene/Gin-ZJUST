@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"os"
@@ -198,6 +197,14 @@ func main() {
 		4: "学院审核不通过",
 		5: "学校审核通过",
 		6: "学校审核不通过",
+	}
+
+	item_status := map[int64]string{
+		1: "待审核",
+		2: "预审核通过",
+		3: "预审核不通过",
+		4: "审核通过",
+		5: "审核不通过",
 	}
 
 	to_audit_map := map[int64]int64{ // 管理员类型 to 可操作项目状态
@@ -405,8 +412,11 @@ func main() {
 
 	r.GET("/add_basic_item.html", Midware_Auth, Authorities(0b000001), func(c *gin.Context) {
 		userID := c.GetString("userID")
-		sql := "SELECT name,score_lower_range,score_higher_range,create_org,description FROM item WHERE type=0;"
+		sql := "SELECT * FROM item WHERE type=0 OR type=1;"
 		query_res := query(sql)
+		for _, item := range query_res {
+			item["type"] = item_types[item["type"].(int64)]
+		}
 		c.HTML(http.StatusOK, "add_basic_item.html", gin.H{
 			"msg":   "welcome, " + userID,
 			"added": query_res,
@@ -421,11 +431,11 @@ func main() {
 		if len(query_res) == 0 {
 			score_lower_range, _ := strconv.ParseFloat(c.PostForm("score_lower_range"), 64)
 			score_higher_range, _ := strconv.ParseFloat(c.PostForm("score_higher_range"), 64)
-			org_name := query("SELECT * FROM user WHERE userID=" + userID)[0]["belonging_org"].(string)
+			tp := c.PostForm("type")
+			orgID := query("SELECT * FROM user WHERE userID=" + userID)[0]["belonging_org"].(int64)
 			description := c.PostForm("description")
-			sql = fmt.Sprintf("INSERT INTO item VALUES(NULL,0,0,\"%s\",%.1f,%.1f,\"%s\",\"%s\",NULL);", item_name, score_lower_range, score_higher_range, org_name, description)
+			sql = fmt.Sprintf("INSERT INTO item VALUES(NULL,%s,0,\"%s\",%.1f,%.1f,%d,\"%s\",%d,\"\");", tp, item_name, score_lower_range, score_higher_range, orgID, description, time.Now().Unix())
 			ok := exec(sql)
-
 			if ok {
 				msg = "添加成功！"
 			} else {
@@ -434,8 +444,11 @@ func main() {
 		} else {
 			msg = "添加失败。项目已存在！"
 		}
-		sql = "SELECT name,score_lower_range,score_higher_range,create_org,description FROM item WHERE type=0;"
+		sql = "SELECT * FROM item WHERE type=0 OR type=1;"
 		query_res = query(sql)
+		for _, item := range query_res {
+			item["type"] = item_types[item["type"].(int64)]
+		}
 		c.HTML(http.StatusOK, "add_basic_item.html", gin.H{
 			"msg":   msg,
 			"added": query_res,
@@ -446,7 +459,7 @@ func main() {
 		to_delete := c.Query("name")
 		sql := fmt.Sprintf("DELETE FROM item WHERE name=\"%s\";", to_delete)
 		exec(sql)
-		sql = "SELECT name,score_lower_range,score_higher_range,create_org,description FROM item WHERE type=0;"
+		sql = "SELECT name,score_lower_range,score_higher_range,create_org,description FROM item WHERE type=0 OR type=1;"
 		query_res := query(sql)
 		c.HTML(http.StatusOK, "add_basic_item.html", gin.H{
 			"msg":   "删除成功！",
@@ -851,6 +864,9 @@ func main() {
 				"msg": msg,
 			})
 		} else {
+			create_orgID := item[0]["create_org"].(int64)
+			sql = fmt.Sprintf("SELECT * FROM organization WHERE orgID=%d", create_orgID)
+			item[0]["create_org"] = query(sql)[0]["name"].(string)
 			c.HTML(http.StatusOK, "item_info.html", gin.H{
 				"msg":  msg,
 				"item": item[0],
@@ -873,7 +889,7 @@ func main() {
 			if ok {
 				form, _ := c.MultipartForm()
 				files := form.File
-				path := fmt.Sprintf("upload/%s/%d/", userID, cur_time)
+				path := fmt.Sprintf("upload/basic/%s/%d/", userID, cur_time)
 				_, err := os.Stat(path)
 				if os.IsNotExist(err) {
 					os.MkdirAll(path, os.ModePerm)
@@ -947,8 +963,8 @@ func main() {
 			records := []map[string]any{}
 			json.Unmarshal([]byte(records_json), &records)
 			time := appliance[0]["time_unix"].(int64)
-			path := "upload/" + userID + "/" + strconv.Itoa(int(time)) + "/"
-			dir, _ := ioutil.ReadDir(path)
+			path := "upload/basic/" + userID + "/" + strconv.Itoa(int(time)) + "/"
+			dir, _ := os.ReadDir(path)
 			paths := []string{}
 			for _, file := range dir {
 				if !file.IsDir() {
@@ -1015,11 +1031,27 @@ func main() {
 			return
 		}
 		userID := c.GetString("userID")
-		userID_get := fields[1]
-		if userID != userID_get {
-			c.AbortWithStatusJSON(http.StatusNotFound, "{\"error\":\"权限不足！\"}")
+		if fields[1] == "basic" {
+			userID_get := fields[2]
+			if userID != userID_get {
+				c.AbortWithStatusJSON(http.StatusNotFound, "{\"error\":\"权限不足！\"}")
+				return
+			}
+		} else if fields[1] == "activity" {
+			orgID_get := fields[2]
+			userID := c.GetString("userID")
+			sql := fmt.Sprintf("SELECT belonging_org FROM user WHERE userID=\"%s\";", userID)
+			orgID_need := query(sql)[0]["belonging_org"].(int64)
+			a, ok := strconv.Atoi(orgID_get)
+			if ok != nil || int64(a) != orgID_need {
+				c.AbortWithStatusJSON(http.StatusNotFound, "{\"error\":\"权限不足！\"}")
+				return
+			}
+		} else {
+			c.AbortWithStatusJSON(http.StatusNotFound, "{\"error\":\"路径有误！\"}")
 			return
 		}
+
 		c.File(path)
 	})
 
@@ -1261,7 +1293,122 @@ func main() {
 		c.Redirect(http.StatusTemporaryRedirect, "audit_basic.html")
 	})
 
-	// todo : 赋分
+	r.GET("/add_item.html", Midware_Auth, Authorities(0b001100), func(c *gin.Context) {
+		userID := c.GetString("userID")
+		sql := fmt.Sprintf("SELECT * FROM user WHERE userID=\"%s\";", userID)
+		orgID := query(sql)[0]["belonging_org"].(int64)
+		sql = fmt.Sprintf("SELECT * FROM item WHERE create_org=%d", orgID)
+		items := query(sql)
+		for _, item := range items {
+			item["status"] = item_status[item["status"].(int64)]
+			item["type"] = item_types[item["type"].(int64)]
+		}
+		c.HTML(http.StatusOK, "add_item.html", gin.H{
+			"added": items,
+		})
+	})
+
+	r.POST("/add_activity_item", Midware_Auth, Authorities(0b001100), func(c *gin.Context) {
+		userID := c.GetString("userID")
+		var msg string
+		name := c.PostForm("name")
+		sql := fmt.Sprintf("SELECT * FROM user WHERE userID=\"%s\";", userID)
+		orgID := query(sql)[0]["belonging_org"].(int64)
+		sql = fmt.Sprintf("SELECT * FROM item WHERE name=\"%s\";", name)
+		if len(query(sql)) == 0 {
+			tp := c.PostForm("type")
+			score_lower_range, _ := strconv.ParseFloat(c.PostForm("score_lower_range"), 64)
+			score_higher_range, _ := strconv.ParseFloat(c.PostForm("score_higher_range"), 64)
+			description := c.PostForm("description")
+			time := int(time.Now().Unix())
+			record := []map[string]any{}
+			temp := map[string]any{
+				"operator":  userID,
+				"time":      strconv.Itoa(time),
+				"operation": "添加项目：" + name,
+			}
+			record = append(record, temp)
+			json, _ := json.Marshal(record)
+			sql = fmt.Sprintf("INSERT INTO item VALUES(NULL,%s,1,\"%s\", %.2f, %.2f, %d,\"%s\",%d,'%s');", tp, name, score_lower_range, score_higher_range, orgID, description, time, string(json))
+			ok := exec(sql)
+			fmt.Println(sql)
+			if ok {
+				form, _ := c.MultipartForm()
+				files := form.File
+				path := fmt.Sprintf("upload/activity/%d/%d/", orgID, time)
+				_, err := os.Stat(path)
+				if os.IsNotExist(err) {
+					os.MkdirAll(path, os.ModePerm)
+				}
+				for _, file := range files {
+					f, _ := file[0].Open()
+					defer f.Close()
+					c.SaveUploadedFile(file[0], path+file[0].Filename)
+				}
+				msg = "添加成功！"
+			} else {
+				msg = "添加失败。"
+			}
+		} else {
+			msg = "添加失败：项目名称重复。"
+		}
+
+		sql = fmt.Sprintf("SELECT * FROM item WHERE create_org=%d", orgID)
+		items := query(sql)
+		for _, item := range items {
+			item["status"] = item_status[item["status"].(int64)]
+			item["type"] = item_types[item["type"].(int64)]
+		}
+		c.HTML(http.StatusOK, "add_item.html", gin.H{
+			"msg":   msg,
+			"added": items,
+		})
+
+	})
+
+	r.GET("/added_item_detail", Midware_Auth, Authorities(0b001100), func(c *gin.Context) {
+		itemID := c.Query("itemID")
+		userID := c.GetString("userID")
+		sql := fmt.Sprintf("SELECT belonging_org FROM user WHERE userID=\"%s\";", userID)
+		orgID := query(sql)[0]["belonging_org"].(int64)
+		sql = fmt.Sprintf("SELECT * FROM item WHERE itemID=%s", itemID)
+		item := query(sql)
+		if len(item) == 0 {
+			c.AbortWithStatusJSON(http.StatusNotFound, "{\"error\":\"项目不存在！\"}")
+			return
+		}
+		create_org := item[0]["create_org"].(int64)
+		if orgID != create_org {
+			c.AbortWithStatusJSON(http.StatusNotFound, "{\"error\":\"权限不足！\"}")
+			return
+		}
+		sql = fmt.Sprintf("SELECT name FROM organization WHERE orgID=%d", create_org)
+		item[0]["create_org"] = query(sql)[0]["name"].(string)
+		item[0]["status"] = item_status[item[0]["status"].(int64)]
+
+		time := item[0]["time_unix"].(int64)
+		path := "upload/activity/" + strconv.Itoa(int(create_org)) + "/" + strconv.Itoa(int(time)) + "/"
+		dir, _ := os.ReadDir(path)
+		paths := []string{}
+		for _, file := range dir {
+			if !file.IsDir() {
+				paths = append(paths, path+file.Name())
+			}
+		}
+
+		record_str := item[0]["record"].(string)
+		records := []map[string]any{}
+		json.Unmarshal([]byte(record_str), &records)
+
+		c.HTML(http.StatusOK, "added_item_detail.html", gin.H{
+			"item":    item[0],
+			"paths":   paths,
+			"records": records,
+		})
+
+	})
+
+	//todo : 立项审核
 
 	r.Run(":4203") // Listening at http://localhost:4203
 }

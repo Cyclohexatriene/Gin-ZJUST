@@ -34,6 +34,8 @@ CREATE TABLE item(
     name TEXT NOT NULL,
     score_lower_range REAL,
     score_higher_range REAL,
-    create_org TEXT,
-    description TEXT
+    create_org INT,
+    description TEXT,
+    time_unix INT,
+    record TEXT
 );

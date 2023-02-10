@@ -8,7 +8,13 @@
     <br>
     分数范围：<input name="score_lower_range"> - <input name="score_higher_range">
     <br>
-    所属组织：<input name="description">
+    项目类型：
+    <select name="type">
+        <option value="0">第二课堂</option>
+        <option value="1">第三课堂</option>
+    </select>
+    <br>
+    项目内容：<input name="description">
     <br>
     <input type="submit" value="提交">
 </form>
@@ -18,6 +24,7 @@
     <caption>
         <th>序号</th>
         <th>项目名称</th>
+        <th>项目类型</th>
         <th>分数范围</th>
         <th>项目内容</th>
         <th>操作</th>
@@ -26,6 +33,7 @@
     <tr>
         <td align="center">{{$idx}}</td>
         <td align="center">{{$value.name}}</td>
+        <td align="center">{{$value.type}}</td>
         <td align="center">{{$value.score_lower_range}} - {{$value.score_higher_range}}</td>
         <td>{{$value.description}}</td>
         <td><a href={{strcat "/delete_basic_item?name=" $value.name}}>删除</a></td>

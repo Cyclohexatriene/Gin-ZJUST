@@ -1,1 +1,47 @@
-项目立项
+<html>
+<head><title>活动项目立项</title></head>
+<body>
+<h1>{{.msg}}</h1>
+<h1>活动项目立项：</h1>
+<form action="add_activity_item" method="POST" enctype="multipart/form-data">
+    项目名称：<input name="name">
+    <br>
+    分数范围：<input name="score_lower_range"> - <input name="score_higher_range">
+    <br>
+    项目类型：
+    <select name="type">
+        <option value="2">第二课堂</option>
+        <option value="3">第三课堂</option>
+    </select>
+    <br>
+    项目内容：<input name="description">
+    <br>
+    上传策划案：<input type="file" name="file1" multiple />
+    <br>
+    <input type="submit" value="提交">
+</form>
+
+<h1>已申请项目：</h1>
+<table border="1" style="border-collapse: collapse;">
+    <caption>
+        <th>序号</th>
+        <th>项目名称</th>
+        <th>项目类型</th>
+        <th>分数范围</th>
+        <th>项目内容</th>
+        <th>操作</th>
+    </caption>
+    {{range $idx, $value := .added}}
+    <tr>
+        <td align="center">{{$idx}}</td>
+        <td align="center">{{$value.name}}</td>
+        <td align="center">{{$value.type}}</td>
+        <td align="center">{{$value.score_lower_range}} - {{$value.score_higher_range}}</td>
+        <td>{{$value.description}}</td>
+        <td><a href={{strcat1 "/added_item_detail?itemID=" $value.itemID}}>查看</a></td>
+    </tr>
+    {{end}}
+</table>
+
+</body>
+</html>

@@ -1,0 +1,59 @@
+<html>
+<head><title>项目详情</title></head>
+<body>
+<h1>{{.msg}}</h1>
+<h1>项目详情</h1>
+<table border="1" style="border-collapse: collapse;">
+    <caption>
+        <th>项目名称</th>
+        <th>项目类型</th>
+        <th>记点范围</th>
+        <th>创建单位</th>
+        <th>申请事项</th>
+        <th>项目状态</th>
+        <th>附件</th>
+    </caption>
+    <tr>
+        <td align="center">{{.item.name}}</td>
+        <td align="center">{{.item.type}}</td>
+        <td align="center">{{.item.score_lower_range}} -  {{.item.score_higher_range}}</td>
+        <td align="center">{{.item.create_org}}</td>
+        <td align="center">{{.item.description}}</td>
+        <td align="center">{{.item.status}}</td>
+        <td align="center">
+            {{range $idx, $path := .paths}}
+                <a href={{strcat "/get_file?path=" $path}}>{{get_file_name $path}}</a>
+            {{end}}
+        </td>
+    </tr>
+</table>
+
+{{if eq .item.status "预审核通过"}}
+<h1>导入学生名单</h1>
+<br><br>
+学生名单请用JSON字符串表示，JSON字符串应有三个字段：学号（字符串）、记点（浮点数）、备注（字符串）。
+<br>
+<form action={{strcat1 "import_student_list?itemID=" .item.itemID}} method="POST">
+    学生名单：<input name="list">
+    <br>
+    <input type="submit" value="提交">
+</form>
+{{end}}
+
+<h1>操作记录</h1>
+<table border="1" style="border-collapse: collapse;">
+    <caption>
+        <th>操作者</th>
+        <th>操作时间</th>
+        <th>操作内容</th>
+    </caption>
+    {{range $idx, $record := .records}}
+    <tr>
+        <td align="center">{{$record.operator}}</td>
+        <td align="center">{{$record.time}}</td>
+        <td align="center">{{$record.operation}}</td>
+    </tr>
+    {{end}}
+</table>
+</body>
+</html>
