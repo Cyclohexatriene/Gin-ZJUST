@@ -1,1 +1,30 @@
- 立项项目审核
+<html>
+<head><title>立项项目审核</title></head>
+<body>
+<h1>{{.msg}}</h1>
+<h1>待审核项目：</h1>
+共有 {{.sum2}} 个第二课堂项目 和 {{.sum3}} 个第三课堂项目待审核。
+<table border="1" style="border-collapse: collapse;">
+    <caption>
+        <th>序号</th>
+        <th>项目名称</th>
+        <th>项目类型</th>
+        <th>分数范围</th>
+        <th>项目内容</th>
+        <th>项目状态</th>
+        <th>操作</th>
+    </caption>
+    {{range $idx, $value := .added}}
+    <tr>
+        <td align="center">{{$idx}}</td>
+        <td align="center">{{$value.name}}</td>
+        <td align="center">{{$value.type}}</td>
+        <td align="center">{{$value.score_lower_range}} - {{$value.score_higher_range}}</td>
+        <td>{{$value.description}}</td>
+        <td align="center">{{$value.status}}</td>
+        <td><a href={{strcat1 "/audit_added_detail?itemID=" $value.itemID}}>查看</a></td>
+    </tr>
+    {{end}}
+</table>
+</body>
+</html>

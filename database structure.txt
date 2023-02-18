@@ -22,8 +22,9 @@ CREATE TABLE appliance(
     score REAL,
     status INT, // 0: 团支部待审核 1: 团支部审核通过 2: 团支部审核不通过 3: 学院审核通过 4: 学院审核不通过 5: 学校审核通过 6: 学校审核不通过
     record TEXT, // 审核记录，字段：operator（操作者）、time（时间，以UNIX时间戳记录）、operation（操作详情）
-    description TEXT,
-    time_unix INT
+    time_unix INT,
+    description TEXT
+    
 );
 
 item表：// 项目

@@ -28,17 +28,6 @@
     </tr>
 </table>
 
-{{if eq .item.status "预审核通过"}}
-<h1>导入学生名单</h1>
-学生名单请用JSON字符串表示，JSON字符串应有三个字段：ID（学号，字符串）、score（记点数，浮点数）、description（备注，字符串），并以列表形式输入。
-<br>
-<form action={{strcat1 "import_student_list?itemID=" .item.itemID}} method="POST">
-    学生名单：<input name="list">
-    <br>
-    <input type="submit" value="提交">
-</form>
-{{end}}
-
 {{if show_list .item.status}}
 <h1>已导入学生名单</h1>
 <table border="1" style="border-collapse: collapse;">
@@ -74,5 +63,28 @@
     </tr>
     {{end}}
 </table>
+
+{{if show_operation .item.status}}
+<h1>操作</h1>
+<form action={{strcat1 "audit_added_item?itemID=" .item.itemID}} method="POST">
+    {{if eq .item.status "待审核"}}
+        <select name="action">
+            <option value="2">预审核通过</option>
+            <option value="3">预审核不通过</option>
+        </select>
+    {{end}}
+    {{if eq .item.status "预审核通过"}}
+        <select name="action">
+            <option value="4">审核通过</option>
+            <option value="5">审核不通过</option>
+        </select>
+    {{end}}
+    <br>
+    审核意见：<input name="opinion"/>
+    <br>
+    <input type="submit" value="提交">
+</form>
+{{end}}
+
 </body>
 </html>

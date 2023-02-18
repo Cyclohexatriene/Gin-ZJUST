@@ -29,6 +29,7 @@
         <th>项目类型</th>
         <th>分数范围</th>
         <th>项目内容</th>
+        <th>项目状态</th>
         <th>操作</th>
     </caption>
     {{range $idx, $value := .added}}
@@ -38,6 +39,7 @@
         <td align="center">{{$value.type}}</td>
         <td align="center">{{$value.score_lower_range}} - {{$value.score_higher_range}}</td>
         <td>{{$value.description}}</td>
+        <td align="center">{{$value.status}}</td>
         <td><a href={{strcat1 "/added_item_detail?itemID=" $value.itemID}}>查看</a></td>
     </tr>
     {{end}}

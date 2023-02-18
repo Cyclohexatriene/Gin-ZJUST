@@ -156,12 +156,22 @@ func get_file_name(a string) string {
 	return b[len(b)-1]
 }
 
+func show_list(a string) bool {
+	return a == "预审核通过" || a == "审核通过" || a == "审核不通过"
+}
+
+func show_operation(a string) bool {
+	return a == "待审核" || a == "预审核通过"
+}
+
 func main() {
 	r := gin.Default()
 	r.SetFuncMap(template.FuncMap{
-		"strcat":        strcat,
-		"strcat1":       strcat1,
-		"get_file_name": get_file_name,
+		"strcat":         strcat,
+		"strcat1":        strcat1,
+		"get_file_name":  get_file_name,
+		"show_list":      show_list,
+		"show_operation": show_operation,
 	})
 	rand.Seed(time.Now().Unix())            // 服务器每次重启根据当前时间重置随机数种子
 	db, _ = sqlx.Open("sqlite3", "data.db") // 打开数据库
@@ -190,7 +200,7 @@ func main() {
 	}
 
 	appliance_status := map[int64]string{
-		0: "团支部待审核",
+		0: "待审核",
 		1: "团支部审核通过",
 		2: "团支部审核不通过",
 		3: "学院审核通过",
@@ -1023,9 +1033,11 @@ func main() {
 			"sum3":       sum3,
 		})
 	})
-	r.GET("/get_file", Midware_Auth, func(c *gin.Context) {
+	r.GET("/get_file", Midware_Auth, Authorities(0b111111), func(c *gin.Context) {
 		path := c.Query("path")
 		fields := strings.Split(path, "/")
+		account_type := c.GetInt64("account_type")
+		is_admin := account_type == 0 || account_type == 1
 		if fields[0] != "upload" {
 			c.AbortWithStatusJSON(http.StatusNotFound, "{\"error\":\"路径有误！\"}")
 			return
@@ -1033,7 +1045,7 @@ func main() {
 		userID := c.GetString("userID")
 		if fields[1] == "basic" {
 			userID_get := fields[2]
-			if userID != userID_get {
+			if !is_admin && userID != userID_get {
 				c.AbortWithStatusJSON(http.StatusNotFound, "{\"error\":\"权限不足！\"}")
 				return
 			}
@@ -1043,7 +1055,7 @@ func main() {
 			sql := fmt.Sprintf("SELECT belonging_org FROM user WHERE userID=\"%s\";", userID)
 			orgID_need := query(sql)[0]["belonging_org"].(int64)
 			a, ok := strconv.Atoi(orgID_get)
-			if ok != nil || int64(a) != orgID_need {
+			if !is_admin && (ok != nil || int64(a) != orgID_need) {
 				c.AbortWithStatusJSON(http.StatusNotFound, "{\"error\":\"权限不足！\"}")
 				return
 			}
@@ -1400,15 +1412,229 @@ func main() {
 		records := []map[string]any{}
 		json.Unmarshal([]byte(record_str), &records)
 
+		list := []map[string]any{}
+		if status := item[0]["status"]; status == "预审核通过" || status == "审核通过" || status == "审核不通过" {
+			sql = fmt.Sprintf("SELECT * FROM appliance WHERE itemID=%s;", itemID)
+			list = query(sql)
+			for _, ap := range list {
+				ap["status"] = appliance_status[ap["status"].(int64)]
+			}
+		}
+
 		c.HTML(http.StatusOK, "added_item_detail.html", gin.H{
 			"item":    item[0],
 			"paths":   paths,
 			"records": records,
+			"list":    list,
 		})
 
 	})
 
-	//todo : 立项审核
+	r.GET("/audit_added.html", Midware_Auth, Authorities(0b000011), func(c *gin.Context) {
+		sql := "SELECT * FROM item WHERE status=1 OR status=2"
+		items := query(sql)
+		sum2, sum3 := 0, 0
+		for _, item := range items {
+			if item["type"].(int64) == 2 {
+				sum2++
+			} else {
+				sum3++
+			}
+			item["type"] = item_types[item["type"].(int64)]
+			item["status"] = item_status[item["status"].(int64)]
+		}
+		c.HTML(http.StatusOK, "audit_added.html", gin.H{
+			"added": items,
+			"sum2":  sum2,
+			"sum3":  sum3,
+		})
+	})
+
+	r.POST("/audit_added.html", Midware_Auth, Authorities(0b000011), func(c *gin.Context) {
+		sql := "SELECT * FROM item WHERE status=1 OR status=2"
+		items := query(sql)
+		sum2, sum3 := 0, 0
+		for _, item := range items {
+			if item["type"].(int64) == 2 {
+				sum2++
+			} else {
+				sum3++
+			}
+			item["type"] = item_types[item["type"].(int64)]
+			item["status"] = item_status[item["status"].(int64)]
+		}
+		c.HTML(http.StatusOK, "audit_added.html", gin.H{
+			"added": items,
+			"sum2":  sum2,
+			"sum3":  sum3,
+		})
+	})
+
+	r.GET("/audit_added_detail", Midware_Auth, Authorities(0b000011), func(c *gin.Context) {
+		itemID := c.Query("itemID")
+		sql := fmt.Sprintf("SELECT * FROM item WHERE itemID=%s;", itemID)
+		item_t := query(sql)
+		if len(item_t) == 0 {
+			c.AbortWithStatusJSON(http.StatusNotFound, "{\"error\":\"项目不存在！\"}")
+			return
+		}
+		item := item_t[0]
+		create_org := item["create_org"].(int64)
+		sql = fmt.Sprintf("SELECT name FROM organization WHERE orgID=%d", create_org)
+		item["create_org"] = query(sql)[0]["name"].(string)
+		time := item["time_unix"].(int64)
+		path := "upload/activity/" + strconv.Itoa(int(create_org)) + "/" + strconv.Itoa(int(time)) + "/"
+		dir, _ := os.ReadDir(path)
+		paths := []string{}
+		for _, file := range dir {
+			if !file.IsDir() {
+				paths = append(paths, path+file.Name())
+			}
+		}
+		list := []map[string]any{}
+		if status := item["status"].(int64); status == 2 || status == 4 || status == 5 {
+			sql = fmt.Sprintf("SELECT * FROM appliance WHERE itemID=%d;", item["itemID"].(int64))
+			list = query(sql)
+			for _, ap := range list {
+				ap["status"] = appliance_status[ap["status"].(int64)]
+			}
+		}
+
+		records_str := item["record"].(string)
+		records := []map[string]any{}
+		json.Unmarshal([]byte(records_str), &records)
+		item["type"] = item_types[item["type"].(int64)]
+		item["status"] = item_status[item["status"].(int64)]
+		c.HTML(http.StatusOK, "audit_added_detail.html", gin.H{
+			"item":    item,
+			"list":    list,
+			"records": records,
+			"paths":   paths,
+		})
+
+	})
+
+	r.POST("/audit_added_item", Midware_Auth, Authorities(0b000011), func(c *gin.Context) {
+		userID := c.GetString("userID")
+		itemID := c.Query("itemID")
+		action := c.PostForm("action")
+		opinion := c.PostForm("opinion")
+		sql := fmt.Sprintf("SELECT * FROM item WHERE itemID=%s;", itemID)
+		item_t := query(sql)
+		if len(item_t) == 0 {
+			c.AbortWithStatusJSON(http.StatusNotFound, "{\"error\":\"项目不存在！\"}")
+			return
+		}
+		item := item_t[0]
+		sql = fmt.Sprintf("UPDATE item SET status=%s WHERE itemID=%s", action, itemID)
+		exec(sql)
+		records_str := item["record"].(string)
+		records := []map[string]any{}
+		json.Unmarshal([]byte(records_str), &records)
+		new_status, _ := strconv.Atoi(action)
+		operation := item_status[int64(new_status)]
+		operation += "。审核意见："
+		operation += opinion
+		new_record := map[string]any{
+			"operator":  userID,
+			"time":      strconv.Itoa(int(time.Now().Unix())),
+			"operation": operation,
+		}
+		records = append(records, new_record)
+		records_new, _ := json.Marshal(records)
+		records_str = string(records_new)
+		sql = fmt.Sprintf("UPDATE item SET record='%s' WHERE itemID=%s", records_str, itemID)
+		exec(sql)
+
+		if action == "4" {
+			sql = fmt.Sprintf("UPDATE appliance SET status=5,record='%s' WHERE itemID=%s", records_str, itemID)
+			exec(sql)
+		} else if action == "5" {
+			sql = fmt.Sprintf("UPDATE appliance SET status=6,record='%s' WHERE itemID=%s", records_str, itemID)
+			exec(sql)
+		}
+		c.Redirect(http.StatusTemporaryRedirect, "/audit_added.html")
+	})
+
+	r.POST("/import_student_list", Midware_Auth, Authorities(0b001100), func(c *gin.Context) {
+		list := c.PostForm("list")
+		students := []map[string]any{}
+		itemID := c.Query("itemID")
+		err := json.Unmarshal([]byte(list), &students)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusNotFound, "{\"error\":\"输入有误！\"}")
+			return
+		}
+
+		userID := c.GetString("userID")
+		sql := fmt.Sprintf("SELECT belonging_org FROM user WHERE userID=\"%s\";", userID)
+		orgID := query(sql)[0]["belonging_org"].(int64)
+		sql = fmt.Sprintf("SELECT * FROM item WHERE itemID=%s", itemID)
+		item := query(sql)
+		if len(item) == 0 {
+			c.AbortWithStatusJSON(http.StatusNotFound, "{\"error\":\"项目不存在！\"}")
+			return
+		}
+		create_org := item[0]["create_org"].(int64)
+		if orgID != create_org {
+			c.AbortWithStatusJSON(http.StatusNotFound, "{\"error\":\"权限不足！\"}")
+			return
+		}
+
+		failed := 0
+		sql = fmt.Sprintf("DELETE FROM appliance WHERE itemID=%s;", itemID)
+		exec(sql)
+		for _, stu := range students {
+			sql = fmt.Sprintf("SELECT * FROM user WHERE userID=\"%s\";", stu["ID"].(string))
+			query_res := query(sql)
+			if len(query_res) == 0 {
+				failed++
+				continue
+			}
+			sql = fmt.Sprintf("INSERT INTO appliance VALUES(NULL,%s,\"%s\", %.2f, 0, '[]', %d, '导入项目');", itemID, stu["ID"].(string), stu["score"].(float64), time.Now().Unix())
+			ok := exec(sql)
+			if !ok {
+				failed++
+			}
+		}
+		msg := fmt.Sprintf("共导入 %d 条，其中导入失败 %d 条。", len(students), failed)
+
+		sql = fmt.Sprintf("SELECT name FROM organization WHERE orgID=%d", create_org)
+		item[0]["create_org"] = query(sql)[0]["name"].(string)
+		item[0]["status"] = item_status[item[0]["status"].(int64)]
+
+		record_str := item[0]["record"].(string)
+		records := []map[string]any{}
+		json.Unmarshal([]byte(record_str), &records)
+
+		new_record := map[string]any{
+			"operator":  userID,
+			"time":      strconv.Itoa(int(time.Now().Unix())),
+			"operation": fmt.Sprintf("导入 %d 条学生信息，其中导入失败 %d 条。", len(students), failed),
+		}
+
+		records = append(records, new_record)
+		record_str_t, _ := json.Marshal(records)
+		sql = fmt.Sprintf("UPDATE item SET record='%s' WHERE itemID=%s", string(record_str_t), itemID)
+		exec(sql)
+
+		ls := []map[string]any{}
+		if status := item[0]["status"]; status == "预审核通过" || status == "审核通过" || status == "审核不通过" {
+			sql = fmt.Sprintf("SELECT * FROM appliance WHERE itemID=%s;", itemID)
+			ls = query(sql)
+			for _, ap := range ls {
+				ap["status"] = appliance_status[ap["status"].(int64)]
+			}
+		}
+
+		c.HTML(http.StatusOK, "added_item_detail.html", gin.H{
+			"msg":     msg,
+			"item":    item[0],
+			"records": records,
+			"list":    ls,
+		})
+
+	})
 
 	r.Run(":4203") // Listening at http://localhost:4203
 }
